@@ -1,6 +1,7 @@
-import { Link, NavLink, Outlet } from "@remix-run/react";
+import { Link, NavLink, Outlet, useParams } from "@remix-run/react";
 
 export default function NotesRoute() {
+  const { username } = useParams();
   return (
     <div className="flex h-full justify-between pb-12 border-8 border-blue-500">
       <div>
@@ -9,7 +10,7 @@ export default function NotesRoute() {
         <ul>
           <li>
             <Link to=".." relative="path">
-              Back to user
+              Back to {username}
             </Link>
           </li>
           <li>
