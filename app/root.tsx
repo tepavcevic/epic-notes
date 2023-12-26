@@ -1,4 +1,3 @@
-import { cssBundleHref } from "@remix-run/css-bundle";
 import type { LinksFunction } from "@remix-run/node";
 import {
   Links,
@@ -9,8 +8,14 @@ import {
   ScrollRestoration,
 } from "@remix-run/react";
 
+import favicon from "./assets/favicon.svg";
+import font from "./styles/font.css";
+import styles from "./tailwind.css";
+
 export const links: LinksFunction = () => [
-  ...(cssBundleHref ? [{ rel: "stylesheet", href: cssBundleHref }] : []),
+  { rel: "icon", type: "image/svg+xml", href: favicon },
+  { rel: "stylesheet", href: font },
+  { rel: "stylesheet", href: styles },
 ];
 
 export default function App() {
