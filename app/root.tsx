@@ -10,13 +10,15 @@ import {
 
 import favicon from "./assets/favicon.svg";
 import font from "./styles/font.css";
-import styles from "./tailwind.css";
+import styles from "./styles/tailwind.css";
 
-export const links: LinksFunction = () => [
-  { rel: "icon", type: "image/svg+xml", href: favicon },
-  { rel: "stylesheet", href: font },
-  { rel: "stylesheet", href: styles },
-];
+export const links: LinksFunction = () => {
+  return [
+    { rel: "icon", type: "image/svg+xml", href: favicon },
+    { rel: "stylesheet", href: font },
+    { rel: "stylesheet", href: styles },
+  ];
+};
 
 export default function App() {
   return (
