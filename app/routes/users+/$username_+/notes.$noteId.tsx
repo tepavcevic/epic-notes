@@ -1,5 +1,6 @@
 import { LoaderFunctionArgs, json } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
+import { invariantResponse } from "../../../utils/misc";
 
 const notes = [
   {
@@ -78,6 +79,9 @@ const notes = [
 
 export async function loader({ params }: LoaderFunctionArgs) {
   const note = notes.find((note) => note.id === params.noteId);
+
+  invariantResponse(note, "Note not found.", { status: 404 });
+
   return json({ note });
 }
 
