@@ -1,18 +1,30 @@
+import { useFormAction, useNavigation } from '@remix-run/react'
+import { type ClassValue, clsx } from 'clsx'
+import { twMerge } from 'tailwind-merge'
+
 /**
  * Does its best to get a string error message from an unknown error.
  */
 export function getErrorMessage(error: unknown) {
-  if (typeof error === "string") return error;
-  if (
-    error &&
-    typeof error === "object" &&
-    "message" in error &&
-    typeof error.message === "string"
-  ) {
-    return error.message;
-  }
-  console.error("Unable to get error message for error", error);
-  return "Unknown Error";
+	if (typeof error === 'string') return error
+	if (
+		error &&
+		typeof error === 'object' &&
+		'message' in error &&
+		typeof error.message === 'string'
+	) {
+		return error.message
+	}
+	console.error('Unable to get error message for error', error)
+	return 'Unknown Error'
+}
+
+/**
+ * A handy utility that makes constructing class names easier.
+ * It also merges tailwind classes.
+ */
+export function cn(...inputs: ClassValue[]) {
+	return twMerge(clsx(inputs))
 }
 
 /**
@@ -31,17 +43,37 @@ export function getErrorMessage(error: unknown) {
  * @throws {Response} if condition is falsey
  */
 export function invariantResponse(
-  condition: unknown,
-  message?: string | (() => string),
-  responseInit?: ResponseInit
+	condition: any,
+	message?: string | (() => string),
+	responseInit?: ResponseInit,
 ): asserts condition {
-  if (!condition) {
-    throw new Response(
-      typeof message === "function"
-        ? message()
-        : message ||
-          "An invariant failed, please provide a message to explain why.",
-      { status: 400, ...responseInit }
-    );
-  }
+	if (!condition) {
+		throw new Response(
+			typeof message === 'function'
+				? message()
+				: message ||
+				  'An invariant failed, please provide a message to explain why.',
+			{ status: 400, ...responseInit },
+		)
+	}
+}
+
+/**
+ * Returns true if the current navigation is submitting the current route's
+ * form. Defaults to the current route's form action and method POST.
+ */
+export function useIsSubmitting({
+	formAction,
+	formMethod = 'POST',
+}: {
+	formAction?: string
+	formMethod?: 'POST' | 'GET' | 'PUT' | 'PATCH' | 'DELETE'
+} = {}) {
+	const contextualFormAction = useFormAction()
+	const navigation = useNavigation()
+	return (
+		navigation.state === 'submitting' &&
+		navigation.formAction === (formAction ?? contextualFormAction) &&
+		navigation.formMethod === formMethod
+	)
 }

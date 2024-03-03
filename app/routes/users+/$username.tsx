@@ -1,17 +1,17 @@
 import { Link, useLoaderData } from "@remix-run/react";
 import { LoaderFunctionArgs, json } from "@remix-run/node";
-import { invariantResponse } from "../..//utils/misc";
+import { invariantResponse } from "../../utils/misc.tsx";
+
+const users = [
+  {
+    id: "9d6eba59daa2fc2078cf8205cd451041",
+    email: "kody@kcd.dev",
+    username: "kody",
+    name: "Kody",
+  },
+];
 
 export function loader({ params }: LoaderFunctionArgs) {
-  const users = [
-    {
-      id: "9d6eba59daa2fc2078cf8205cd451041",
-      email: "kody@kcd.dev",
-      username: "kody",
-      name: "Kody",
-    },
-  ];
-
   const user = users.find((user) => user.username === params.username);
 
   invariantResponse(user, "User not found", { status: 404 });

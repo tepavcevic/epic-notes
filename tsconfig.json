@@ -1,22 +1,41 @@
 {
-  "include": ["remix.env.d.ts", "**/*.ts", "**/*.tsx", "postcss.config.js"],
+  "include": [
+    "**/*.ts",
+    "**/*.tsx"
+  ],
   "compilerOptions": {
-    "lib": ["DOM", "DOM.Iterable", "ES2022"],
+    "lib": [
+      "DOM",
+      "DOM.Iterable",
+      "ES2022"
+    ],
     "isolatedModules": true,
     "esModuleInterop": true,
     "jsx": "react-jsx",
-    "moduleResolution": "Bundler",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
     "resolveJsonModule": true,
     "target": "ES2022",
     "strict": true,
+    "noImplicitAny": true,
     "allowJs": true,
     "forceConsistentCasingInFileNames": true,
-    "baseUrl": ".",
     "paths": {
-      "~/*": ["./app/*"]
+      "#*": [
+        "./*"
+      ],
+      "@/icon-name": [
+        "./app/components/ui/icons/name.d.ts",
+        "./types/icon-name.d.ts"
+      ]
     },
-
-    // Remix takes care of building everything in `remix build`.
-    "noEmit": true
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    // Referenced project must have setting "composite": true.
+    "composite": true,
+    "disableReferencedProjectLoad": true,
+    "disableSolutionSearching": true,
+    "disableSourceOfProjectReferenceRedirect": true
   }
 }
