@@ -1,5 +1,12 @@
 import { LoaderFunctionArgs, json, redirect } from '@remix-run/node'
-import { Form, Link, MetaFunction, useLoaderData } from '@remix-run/react'
+import {
+	isRouteErrorResponse,
+	useRouteError,
+	Form,
+	Link,
+	MetaFunction,
+	useLoaderData,
+} from '@remix-run/react'
 import { invariantResponse } from '../../../utils/misc.tsx'
 import { floatingToolbarClassName } from '#app/components/floating-toolbar.tsx'
 import { Button } from '#app/components/ui/button.tsx'
@@ -85,4 +92,30 @@ export const meta: MetaFunction<
 			content: noteContentsSummary,
 		},
 	]
+}
+
+export function ErrorBoundary() {
+	const error = useRouteError()
+
+	if (isRouteErrorResponse(error)) {
+		return (
+			<div className="text-center my-24">
+				<h1>
+					{error.status} {error.statusText}
+				</h1>
+				<p>{error.data}</p>
+			</div>
+		)
+	} else if (error instanceof Error) {
+		return (
+			<div>
+				<h1>Error</h1>
+				<p>{error.message}</p>
+				<p>The stack trace is:</p>
+				<pre>{error.stack}</pre>
+			</div>
+		)
+	} else {
+		return <h1>Unknown Error</h1>
+	}
 }

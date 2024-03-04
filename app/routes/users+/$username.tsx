@@ -1,4 +1,11 @@
-import { Link, MetaFunction, useLoaderData } from '@remix-run/react'
+import {
+	Link,
+	MetaFunction,
+	isRouteErrorResponse,
+	useLoaderData,
+	useParams,
+	useRouteError,
+} from '@remix-run/react'
 import { LoaderFunctionArgs, json } from '@remix-run/node'
 import { invariantResponse } from '../../utils/misc.tsx'
 import { db } from '#app/utils/db.server.ts'
@@ -38,4 +45,32 @@ export const meta: MetaFunction<typeof loader> = ({ data, params }) => {
 		{ title: `${displayName ?? 'Profile'} | Epic Notes` },
 		{ name: 'description', content: `A profile page for ${displayName}` },
 	]
+}
+
+export function ErrorBoundary() {
+	const error = useRouteError()
+	const params = useParams()
+	console.log(error)
+
+	const showMessage = () => {
+		if (isRouteErrorResponse(error) && error.status === 404) {
+			return (
+				<div className="text-lg mt-4">
+					<h1>User {params.username} found</h1>
+				</div>
+			)
+		}
+		return (
+			<div className="text-lg mt-4">
+				<h1>Ooops, something went wrong</h1>
+			</div>
+		)
+	}
+
+	return (
+		<div className="flex flex-col h-full w-full items-center justify-center">
+			<h1 className="text-h1">Error</h1>
+			{showMessage()}
+		</div>
+	)
 }
