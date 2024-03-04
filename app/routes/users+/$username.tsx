@@ -1,35 +1,40 @@
-import { Link, useLoaderData } from "@remix-run/react";
-import { LoaderFunctionArgs, json } from "@remix-run/node";
-import { invariantResponse } from "../../utils/misc.tsx";
-
-const users = [
-  {
-    id: "9d6eba59daa2fc2078cf8205cd451041",
-    email: "kody@kcd.dev",
-    username: "kody",
-    name: "Kody",
-  },
-];
+import { Link, MetaFunction, useLoaderData } from '@remix-run/react'
+import { LoaderFunctionArgs, json } from '@remix-run/node'
+import { invariantResponse } from '../../utils/misc.tsx'
+import { db } from '#app/utils/db.server.ts'
 
 export function loader({ params }: LoaderFunctionArgs) {
-  const user = users.find((user) => user.username === params.username);
+	const user = db.user.findFirst({
+		where: {
+			username: {
+				equals: params.username,
+			},
+		},
+	})
 
-  invariantResponse(user, "User not found", { status: 404 });
+	invariantResponse(user, 'User not found', { status: 404 })
 
-  return json({
-    user,
-  });
+	return json({
+		user,
+	})
 }
 
 export default function UserProfileRoute() {
-  const { user } = useLoaderData<typeof loader>();
+	const { user } = useLoaderData<typeof loader>()
 
-  return (
-    <div className="container mb-48 mt-36">
-      <h1 className="text-h1">{user.name || user.username}</h1>
-      <Link to="notes" className="underline">
-        Notes
-      </Link>
-    </div>
-  );
+	return (
+		<div className="container mb-48 mt-36">
+			<h1 className="text-h1">{user.name || user.username}</h1>
+			<Link to="notes" className="underline" prefetch="intent">
+				Notes
+			</Link>
+		</div>
+	)
+}
+
+export const meta: MetaFunction = () => {
+	return [
+		{ title: 'Profile | Epic Notes' },
+		{ name: 'description', content: 'A profile page for a user' },
+	]
 }

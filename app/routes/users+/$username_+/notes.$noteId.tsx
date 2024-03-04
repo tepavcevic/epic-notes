@@ -1,5 +1,5 @@
-import { LoaderFunctionArgs, json } from "@remix-run/node";
-import { Link, useLoaderData } from "@remix-run/react";
+import { LoaderFunctionArgs, json, redirect } from "@remix-run/node";
+import { Form, Link, useLoaderData } from "@remix-run/react";
 import { invariantResponse } from "../../../utils/misc.tsx";
 import { floatingToolbarClassName } from "#app/components/floating-toolbar.tsx";
 import { Button } from "#app/components/ui/button.tsx";
@@ -19,6 +19,22 @@ export async function loader({ params }: LoaderFunctionArgs) {
   return json({ note });
 }
 
+export async function action({ request, params }: LoaderFunctionArgs) {
+  const formData = await request.formData();
+  const intent = formData.get("intent");
+
+  switch (intent) {
+    case 'delete': {
+      db.note.delete({ where: { id: { equals: params.noteId } } });
+      return redirect(`/users/${params.username}/notes`);
+    }
+
+    default:
+      throw new Response(`Bad request - intent: ${intent}`, { status: 400 });
+  }
+
+}
+
 export default function NoteIdRoute() {
   const { note } = useLoaderData<typeof loader>();
 
@@ -31,7 +47,9 @@ export default function NoteIdRoute() {
         </p>
       </div>
       <div className={floatingToolbarClassName}>
-				<Button variant="destructive">Delete</Button>
+      <Form method="POST">
+        <Button name="intent" value="delete" type="submit" variant="destructive">Delete</Button>
+      </Form>
 				<Button asChild>
 					<Link to="edit">Edit</Link>
 				</Button>
