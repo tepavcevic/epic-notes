@@ -32,9 +32,10 @@ export default function UserProfileRoute() {
 	)
 }
 
-export const meta: MetaFunction = () => {
+export const meta: MetaFunction<typeof loader> = ({ data, params }) => {
+	const displayName = data?.user.name ?? params.username
 	return [
-		{ title: 'Profile | Epic Notes' },
-		{ name: 'description', content: 'A profile page for a user' },
+		{ title: `${displayName ?? 'Profile'} | Epic Notes` },
+		{ name: 'description', content: `A profile page for ${displayName}` },
 	]
 }

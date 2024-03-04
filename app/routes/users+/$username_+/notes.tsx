@@ -1,20 +1,35 @@
 import { Link, NavLink, Outlet, useLoaderData } from '@remix-run/react'
-import { json } from '@remix-run/node'
+import { LoaderFunctionArgs, json } from '@remix-run/node'
 import { db } from '#app/utils/db.server.ts'
+import { invariantResponse } from '#app/utils/misc.tsx'
 
-export async function loader() {
-	//should validate owner after db query as well ad notes
-
-	const notes = db.note.findMany({})
-
-	return json({
-		ownerDisplayName: 'Kody',
-		notes: notes.map(note => ({ id: note.id, title: note.title })),
+export async function loader({ params }: LoaderFunctionArgs) {
+	const owner = db.user.findFirst({
+		where: {
+			username: {
+				equals: params.username,
+			},
+		},
 	})
+
+	invariantResponse(owner, 'Owner not found', { status: 404 })
+
+	const notes = db.note
+		.findMany({
+			where: {
+				owner: {
+					username: {
+						equals: params.username,
+					},
+				},
+			},
+		})
+		.map(({ id, title }) => ({ id, title }))
+	return json({ owner, notes })
 }
 
 export default function NotesRoute() {
-	const { ownerDisplayName, notes } = useLoaderData<typeof loader>()
+	const { owner, notes } = useLoaderData<typeof loader>()
 	const navLinkDefaultClassName =
 		'line-clamp-2 block rounded-l-full py-2 pl-8 pr-6 text-base lg:text-xl'
 
@@ -25,7 +40,7 @@ export default function NotesRoute() {
 					<div className="absolute inset-0 flex flex-col">
 						<Link to=".." relative="path" className="pb-4 pl-8 pr-4 pt-12">
 							<h1 className="text-base font-bold md:text-lg lg:text-left lg:text-2xl">
-								{ownerDisplayName}&apos;s Notes
+								{owner.name}&apos;s Notes
 							</h1>
 						</Link>
 						<ul className="overflow-y-auto overflow-x-hidden pb-12">
