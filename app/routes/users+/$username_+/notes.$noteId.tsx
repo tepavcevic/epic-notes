@@ -12,6 +12,7 @@ import { floatingToolbarClassName } from '#app/components/floating-toolbar.tsx'
 import { Button } from '#app/components/ui/button.tsx'
 import { db } from '#app/utils/db.server.ts'
 import { loader as noteLoader } from './notes.tsx'
+import { GeneralErrorBoundary } from '#app/components/error-boundary.tsx'
 
 export async function loader({ params }: LoaderFunctionArgs) {
 	const note = db.note.findFirst({
@@ -95,27 +96,11 @@ export const meta: MetaFunction<
 }
 
 export function ErrorBoundary() {
-	const error = useRouteError()
-
-	if (isRouteErrorResponse(error)) {
-		return (
-			<div className="text-center my-24">
-				<h1>
-					{error.status} {error.statusText}
-				</h1>
-				<p>{error.data}</p>
-			</div>
-		)
-	} else if (error instanceof Error) {
-		return (
-			<div>
-				<h1>Error</h1>
-				<p>{error.message}</p>
-				<p>The stack trace is:</p>
-				<pre>{error.stack}</pre>
-			</div>
-		)
-	} else {
-		return <h1>Unknown Error</h1>
-	}
+	return (
+		<GeneralErrorBoundary
+			statusHandlers={{
+				404: ({ params }) => <p>Note {params.noteId} not found</p>,
+			}}
+		/>
+	)
 }

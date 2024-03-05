@@ -2,6 +2,7 @@ import { Link, NavLink, Outlet, useLoaderData } from '@remix-run/react'
 import { LoaderFunctionArgs, json } from '@remix-run/node'
 import { db } from '#app/utils/db.server.ts'
 import { invariantResponse } from '#app/utils/misc.tsx'
+import { GeneralErrorBoundary } from '#app/components/error-boundary.tsx'
 
 export async function loader({ params }: LoaderFunctionArgs) {
 	const owner = db.user.findFirst({
@@ -68,5 +69,15 @@ export default function NotesRoute() {
 				</div>
 			</div>
 		</main>
+	)
+}
+
+export function ErrorBoundary() {
+	return (
+		<GeneralErrorBoundary
+			statusHandlers={{
+				404: ({ params }) => <p>User {params.username} not found</p>,
+			}}
+		/>
 	)
 }

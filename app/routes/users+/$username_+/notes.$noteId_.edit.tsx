@@ -13,6 +13,7 @@ import { Label } from '#app/components/ui/label.tsx'
 import { Button } from '#app/components/ui/button.tsx'
 import { floatingToolbarClassName } from '#app/components/floating-toolbar.tsx'
 import { StatusButton } from '#app/components/ui/status-button.tsx'
+import { GeneralErrorBoundary } from '#app/components/error-boundary.tsx'
 
 export async function loader({ params }: LoaderFunctionArgs) {
 	const note = db.note.findFirst({
@@ -96,5 +97,15 @@ export default function NoteEdit() {
 				</StatusButton>
 			</div>
 		</Form>
+	)
+}
+
+export function ErrorBoundary() {
+	return (
+		<GeneralErrorBoundary
+			statusHandlers={{
+				404: ({ params }) => <p>Note {params.noteId} not found</p>,
+			}}
+		/>
 	)
 }
