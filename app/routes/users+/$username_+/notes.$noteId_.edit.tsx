@@ -15,6 +15,7 @@ import { Button } from '#app/components/ui/button.tsx'
 import { floatingToolbarClassName } from '#app/components/floating-toolbar.tsx'
 import { StatusButton } from '#app/components/ui/status-button.tsx'
 import { GeneralErrorBoundary } from '#app/components/error-boundary.tsx'
+import { useEffect, useState } from 'react'
 
 const MAX_TITLE_LENGTH = 100
 const MAX_CONTENT_LENGTH = 10000
@@ -92,9 +93,15 @@ export async function action({ request, params }: LoaderFunctionArgs) {
 	return redirect(`/users/${params.username}/notes/${params.noteId}`)
 }
 
-function ErrorList({ errors }: { errors?: Array<string> | null }) {
+function ErrorList({
+	errors,
+	id,
+}: {
+	errors?: Array<string> | null
+	id?: string
+}) {
 	return errors?.length ? (
-		<ul className="flex flex-col gap-1">
+		<ul className="flex flex-col gap-1" id={id}>
 			{errors.map(error => (
 				<li key={error} className="text-[10px] text-destructive">
 					{error}
@@ -104,17 +111,33 @@ function ErrorList({ errors }: { errors?: Array<string> | null }) {
 	) : null
 }
 
+function useHydrated() {
+	const [hydrated, setHydrated] = useState(false)
+	useEffect(() => {
+		setHydrated(true)
+	}, [])
+	return hydrated
+}
+
 export default function NoteEdit() {
 	const data = useLoaderData<typeof loader>()
 	const actionData = useActionData<typeof action>()
 	const navigation = useNavigation()
 	const formAction = useFormAction()
+	const isHydrated = useHydrated()
 	const formId = 'form-editor'
 
 	const fieldErrors =
 		actionData?.status === 'error' ? actionData?.errors?.fieldErrors : null
 	const formErrors =
 		actionData?.status === 'error' ? actionData?.errors?.formErrors : null
+
+	const isTitleError = Boolean(fieldErrors?.title?.length)
+	const titleErrorId = isTitleError ? 'title-error' : undefined
+	const isContentError = Boolean(fieldErrors?.content?.length)
+	const contentErrorId = isContentError ? 'content-error' : undefined
+	const isFormError = Boolean(formErrors?.length)
+	const formErrorId = isFormError ? 'form-error' : undefined
 
 	const isPending =
 		navigation.state !== 'idle' &&
@@ -127,7 +150,9 @@ export default function NoteEdit() {
 				id={formId}
 				method="POST"
 				className="flex flex-col gap-4 p-12"
-				noValidate
+				noValidate={isHydrated}
+				aria-invalid={isFormError || undefined}
+				aria-describedby={formErrorId}
 			>
 				<div>
 					<Label htmlFor="title">Title</Label>
@@ -140,9 +165,11 @@ export default function NoteEdit() {
 						maxLength={MAX_TITLE_LENGTH}
 						autoComplete="off"
 						autoCorrect="off"
+						aria-invalid={isTitleError || undefined}
+						aria-describedby={titleErrorId}
 					/>
 					<div className="min-h-[32px] px-4 pt-1 pb-3">
-						<ErrorList errors={fieldErrors?.title} />
+						<ErrorList errors={fieldErrors?.title} id={titleErrorId} />
 					</div>
 				</div>
 				<div>
@@ -156,16 +183,25 @@ export default function NoteEdit() {
 						maxLength={MAX_CONTENT_LENGTH}
 						autoComplete="off"
 						autoCorrect="off"
+						aria-invalid={isContentError || undefined}
+						aria-describedby={contentErrorId}
 					/>
 					<div className="min-h-[32px] px-4 pt-1 pb-3">
-						<ErrorList errors={fieldErrors?.content} />
+						<ErrorList errors={fieldErrors?.content} id={contentErrorId} />
 					</div>
 				</div>
 				<div className={floatingToolbarClassName}>
-					<Button type="reset" className="mr-2 bg-red-700" disabled={isPending}>
+					<Button
+						form={formId}
+						type="reset"
+						variant="destructive"
+						className="mr-2"
+						disabled={isPending}
+					>
 						Reset Form
 					</Button>
 					<StatusButton
+						form={formId}
 						status={isPending ? 'pending' : 'idle'}
 						type="submit"
 						disabled={isPending}
@@ -174,7 +210,7 @@ export default function NoteEdit() {
 					</StatusButton>
 				</div>
 				<div className="min-h-[32px] px-4 pt-1 pb-3">
-					<ErrorList errors={formErrors} />
+					<ErrorList errors={formErrors} id={formErrorId} />
 				</div>
 			</Form>
 		</div>
