@@ -15,7 +15,8 @@ import { Button } from '#app/components/ui/button.tsx'
 import { floatingToolbarClassName } from '#app/components/floating-toolbar.tsx'
 import { StatusButton } from '#app/components/ui/status-button.tsx'
 import { GeneralErrorBoundary } from '#app/components/error-boundary.tsx'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { z } from 'zod'
 
 const MAX_TITLE_LENGTH = 100
 const MAX_CONTENT_LENGTH = 10000
@@ -36,47 +37,38 @@ export async function loader({ params }: LoaderFunctionArgs) {
 	})
 }
 
+const NoteEditorSchema = z.object({
+	title: z
+		.string()
+		.min(1, 'Title is required')
+		.max(
+			MAX_TITLE_LENGTH,
+			`Title must be less than ${MAX_TITLE_LENGTH} characters`,
+		),
+	content: z
+		.string()
+		.min(1, 'Content is required')
+		.max(
+			MAX_CONTENT_LENGTH,
+			`Content must be less than ${MAX_CONTENT_LENGTH} characters`,
+		),
+})
+
 export async function action({ request, params }: LoaderFunctionArgs) {
 	const formData = await request.formData()
-	const title = formData.get('title')
-	const content = formData.get('content')
+	const result = NoteEditorSchema.safeParse({
+		title: formData.get('title'),
+		content: formData.get('content'),
+	})
 
-	const errors = {
-		formErrors: [] as Array<string>,
-		fieldErrors: {
-			title: [] as Array<string>,
-			content: [] as Array<string>,
-		},
-	}
-
-	if (title === '') {
-		errors.fieldErrors.title.push('Title is required')
-	}
-	if (title && title.toString()?.length > MAX_TITLE_LENGTH) {
-		errors.fieldErrors.title.push(
-			`Title must be less than ${MAX_TITLE_LENGTH} characters`,
-		)
-	}
-	if (content === '') {
-		errors.fieldErrors.content.push('Content is required')
-	}
-	if (content && content.toString()?.length > MAX_CONTENT_LENGTH) {
-		errors.fieldErrors.content.push(
-			`Content must be less than ${MAX_CONTENT_LENGTH} characters`,
+	if (!result.success) {
+		return json(
+			{ status: 'error', errors: result.error.flatten() },
+			{ status: 400 },
 		)
 	}
 
-	const hasErrors =
-		Object.values(errors.fieldErrors).some(
-			fieldErrors => fieldErrors.length > 0,
-		) || errors.formErrors.length > 0
-
-	if (hasErrors) {
-		return json({ status: 'error', errors } as const, { status: 400 })
-	}
-
-	invariantResponse(typeof title === 'string', 'Title must be a string')
-	invariantResponse(typeof content === 'string', 'Content must be a string')
+	const { title, content } = result.data
 
 	const note = db.note.update({
 		where: {
@@ -126,6 +118,7 @@ export default function NoteEdit() {
 	const formAction = useFormAction()
 	const isHydrated = useHydrated()
 	const formId = 'form-editor'
+	const formRef = useRef<HTMLFormElement>(null)
 
 	const fieldErrors =
 		actionData?.status === 'error' ? actionData?.errors?.fieldErrors : null
@@ -144,6 +137,24 @@ export default function NoteEdit() {
 		navigation.formAction === formAction &&
 		navigation.formMethod === 'POST'
 
+	useEffect(() => {
+		const formEl = formRef.current
+		if (!formEl) {
+			return
+		}
+		if (actionData?.status !== 'error') {
+			return
+		}
+		if (formEl.matches('[aria-invalid="true"]')) {
+			formEl.focus()
+		} else {
+			const firstInvalidField = formEl.querySelector('[aria-invalid="true"]')
+			if (firstInvalidField instanceof HTMLElement) {
+				firstInvalidField.focus()
+			}
+		}
+	}, [])
+
 	return (
 		<div className="absolute inset-0">
 			<Form
@@ -153,6 +164,8 @@ export default function NoteEdit() {
 				noValidate={isHydrated}
 				aria-invalid={isFormError || undefined}
 				aria-describedby={formErrorId}
+				ref={formRef}
+				tabIndex={-1}
 			>
 				<div>
 					<Label htmlFor="title">Title</Label>
@@ -163,6 +176,7 @@ export default function NoteEdit() {
 						disabled={isPending}
 						required
 						maxLength={MAX_TITLE_LENGTH}
+						autoFocus
 						autoComplete="off"
 						autoCorrect="off"
 						aria-invalid={isTitleError || undefined}
