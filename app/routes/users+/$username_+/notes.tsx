@@ -1,8 +1,8 @@
+import { type LoaderFunctionArgs, json } from '@remix-run/node'
 import { Link, NavLink, Outlet, useLoaderData } from '@remix-run/react'
-import { LoaderFunctionArgs, json } from '@remix-run/node'
+import { GeneralErrorBoundary } from '#app/components/error-boundary.tsx'
 import { db } from '#app/utils/db.server.ts'
 import { invariantResponse } from '#app/utils/misc.tsx'
-import { GeneralErrorBoundary } from '#app/components/error-boundary.tsx'
 
 export async function loader({ params }: LoaderFunctionArgs) {
 	const owner = db.user.findFirst({

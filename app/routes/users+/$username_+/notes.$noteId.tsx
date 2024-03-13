@@ -1,18 +1,16 @@
-import { LoaderFunctionArgs, json, redirect } from '@remix-run/node'
 import {
-	isRouteErrorResponse,
-	useRouteError,
-	Form,
-	Link,
-	MetaFunction,
-	useLoaderData,
-} from '@remix-run/react'
-import { invariantResponse } from '../../../utils/misc.tsx'
+	type LoaderFunctionArgs,
+	json,
+	redirect,
+	type ActionFunctionArgs,
+} from '@remix-run/node'
+import { Form, Link, type MetaFunction, useLoaderData } from '@remix-run/react'
+import { GeneralErrorBoundary } from '#app/components/error-boundary.tsx'
 import { floatingToolbarClassName } from '#app/components/floating-toolbar.tsx'
 import { Button } from '#app/components/ui/button.tsx'
 import { db } from '#app/utils/db.server.ts'
-import { loader as noteLoader } from './notes.tsx'
-import { GeneralErrorBoundary } from '#app/components/error-boundary.tsx'
+import { invariantResponse } from '../../../utils/misc.tsx'
+import { type loader as noteLoader } from './notes.tsx'
 
 export async function loader({ params }: LoaderFunctionArgs) {
 	const note = db.note.findFirst({
@@ -28,7 +26,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
 	return json({ note })
 }
 
-export async function action({ request, params }: LoaderFunctionArgs) {
+export async function action({ request, params }: ActionFunctionArgs) {
 	const formData = await request.formData()
 	const intent = formData.get('intent')
 

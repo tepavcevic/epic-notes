@@ -1,5 +1,5 @@
-import { GeneralErrorBoundary } from '#app/components/error-boundary.tsx'
 import { Link, useLocation } from '@remix-run/react'
+import { GeneralErrorBoundary } from '#app/components/error-boundary.tsx'
 
 export async function loader() {
 	throw new Response('Not found', { status: 404 })

@@ -1,15 +1,8 @@
-import {
-	Link,
-	MetaFunction,
-	isRouteErrorResponse,
-	useLoaderData,
-	useParams,
-	useRouteError,
-} from '@remix-run/react'
-import { LoaderFunctionArgs, json } from '@remix-run/node'
-import { invariantResponse } from '../../utils/misc.tsx'
-import { db } from '#app/utils/db.server.ts'
+import { type LoaderFunctionArgs, json } from '@remix-run/node'
+import { Link, type MetaFunction, useLoaderData } from '@remix-run/react'
 import { GeneralErrorBoundary } from '#app/components/error-boundary.tsx'
+import { db } from '#app/utils/db.server.ts'
+import { invariantResponse } from '../../utils/misc.tsx'
 
 export function loader({ params }: LoaderFunctionArgs) {
 	const user = db.user.findFirst({

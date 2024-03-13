@@ -1,4 +1,11 @@
-import { json, redirect, type LoaderFunctionArgs } from '@remix-run/node'
+import { getFormProps, getInputProps, useForm } from '@conform-to/react'
+import { getZodConstraint, parseWithZod } from '@conform-to/zod'
+import {
+	json,
+	redirect,
+	type LoaderFunctionArgs,
+	type ActionFunctionArgs,
+} from '@remix-run/node'
 import {
 	Form,
 	useActionData,
@@ -6,17 +13,16 @@ import {
 	useLoaderData,
 	useNavigation,
 } from '@remix-run/react'
+import { z } from 'zod'
+import { GeneralErrorBoundary } from '#app/components/error-boundary.tsx'
+import { floatingToolbarClassName } from '#app/components/floating-toolbar.tsx'
+import { Button } from '#app/components/ui/button.tsx'
+import { Input } from '#app/components/ui/input.tsx'
+import { Label } from '#app/components/ui/label.tsx'
+import { StatusButton } from '#app/components/ui/status-button.tsx'
+import { Textarea } from '#app/components/ui/textarea.tsx'
 import { db } from '#app/utils/db.server.ts'
 import { invariantResponse } from '#app/utils/misc.tsx'
-import { Input } from '#app/components/ui/input.tsx'
-import { Textarea } from '#app/components/ui/textarea.tsx'
-import { Label } from '#app/components/ui/label.tsx'
-import { Button } from '#app/components/ui/button.tsx'
-import { floatingToolbarClassName } from '#app/components/floating-toolbar.tsx'
-import { StatusButton } from '#app/components/ui/status-button.tsx'
-import { GeneralErrorBoundary } from '#app/components/error-boundary.tsx'
-import { useEffect, useRef, useState } from 'react'
-import { z } from 'zod'
 
 const MAX_TITLE_LENGTH = 100
 const MAX_CONTENT_LENGTH = 10000
@@ -39,14 +45,14 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
 const NoteEditorSchema = z.object({
 	title: z
-		.string()
+		.string({ required_error: 'Title is required' })
 		.min(1, 'Title is required')
 		.max(
 			MAX_TITLE_LENGTH,
 			`Title must be less than ${MAX_TITLE_LENGTH} characters`,
 		),
 	content: z
-		.string()
+		.string({ required_error: 'Content is required' })
 		.min(1, 'Content is required')
 		.max(
 			MAX_CONTENT_LENGTH,
@@ -54,23 +60,21 @@ const NoteEditorSchema = z.object({
 		),
 })
 
-export async function action({ request, params }: LoaderFunctionArgs) {
-	const formData = await request.formData()
-	const result = NoteEditorSchema.safeParse({
-		title: formData.get('title'),
-		content: formData.get('content'),
-	})
+export async function action(
+	args: Pick<ActionFunctionArgs, 'request' | 'params'>,
+): Promise<Response> {
+	const { request, params } = args
 
-	if (!result.success) {
-		return json(
-			{ status: 'error', errors: result.error.flatten() },
-			{ status: 400 },
-		)
+	const formData = await request.formData()
+	const submission = parseWithZod(formData, { schema: NoteEditorSchema })
+
+	if (submission.status !== 'success') {
+		return json({ status: 'error', submission }, { status: 400 })
 	}
 
-	const { title, content } = result.data
+	const { title, content } = submission.value
 
-	const note = db.note.update({
+	db.note.update({
 		where: {
 			id: {
 				equals: params.noteId,
@@ -103,105 +107,73 @@ function ErrorList({
 	) : null
 }
 
-function useHydrated() {
-	const [hydrated, setHydrated] = useState(false)
-	useEffect(() => {
-		setHydrated(true)
-	}, [])
-	return hydrated
-}
-
 export default function NoteEdit() {
 	const data = useLoaderData<typeof loader>()
 	const actionData = useActionData<typeof action>()
 	const navigation = useNavigation()
 	const formAction = useFormAction()
-	const isHydrated = useHydrated()
-	const formId = 'form-editor'
-	const formRef = useRef<HTMLFormElement>(null)
+	const formId = 'note-form-editor'
 
-	const fieldErrors =
-		actionData?.status === 'error' ? actionData?.errors?.fieldErrors : null
-	const formErrors =
-		actionData?.status === 'error' ? actionData?.errors?.formErrors : null
+	const [form, fields] = useForm({
+		id: formId,
+		lastResult: actionData?.submission,
+		shouldValidate: 'onBlur',
+		shouldRevalidate: 'onInput',
+		constraint: getZodConstraint(NoteEditorSchema),
+		onValidate({ formData }) {
+			return parseWithZod(formData, { schema: NoteEditorSchema })
+		},
+		defaultValue: {
+			title: data.note.title,
+			content: data.note.content,
+		},
+	})
 
-	const isTitleError = Boolean(fieldErrors?.title?.length)
-	const titleErrorId = isTitleError ? 'title-error' : undefined
-	const isContentError = Boolean(fieldErrors?.content?.length)
-	const contentErrorId = isContentError ? 'content-error' : undefined
-	const isFormError = Boolean(formErrors?.length)
-	const formErrorId = isFormError ? 'form-error' : undefined
+	console.log(fields.title.errors)
 
 	const isPending =
 		navigation.state !== 'idle' &&
 		navigation.formAction === formAction &&
 		navigation.formMethod === 'POST'
 
-	useEffect(() => {
-		const formEl = formRef.current
-		if (!formEl) {
-			return
-		}
-		if (actionData?.status !== 'error') {
-			return
-		}
-		if (formEl.matches('[aria-invalid="true"]')) {
-			formEl.focus()
-		} else {
-			const firstInvalidField = formEl.querySelector('[aria-invalid="true"]')
-			if (firstInvalidField instanceof HTMLElement) {
-				firstInvalidField.focus()
-			}
-		}
-	}, [])
-
 	return (
 		<div className="absolute inset-0">
 			<Form
-				id={formId}
 				method="POST"
 				className="flex flex-col gap-4 p-12"
-				noValidate={isHydrated}
-				aria-invalid={isFormError || undefined}
-				aria-describedby={formErrorId}
-				ref={formRef}
-				tabIndex={-1}
+				{...getFormProps(form)}
 			>
 				<div>
-					<Label htmlFor="title">Title</Label>
+					<Label htmlFor={fields.title.id}>Title</Label>
 					<Input
-						id="title"
-						name="title"
-						defaultValue={data.note.title}
+						{...getInputProps(fields.title, { type: 'text' })}
 						disabled={isPending}
-						required
 						maxLength={MAX_TITLE_LENGTH}
 						autoFocus
 						autoComplete="off"
 						autoCorrect="off"
-						aria-invalid={isTitleError || undefined}
-						aria-describedby={titleErrorId}
 					/>
 					<div className="min-h-[32px] px-4 pt-1 pb-3">
-						<ErrorList errors={fieldErrors?.title} id={titleErrorId} />
+						<ErrorList
+							errors={fields?.title.errors}
+							id={fields.title.errorId}
+						/>
 					</div>
 				</div>
 				<div>
-					<Label htmlFor="content">Content</Label>
+					<Label id={fields.content.id}>Content</Label>
 					<Textarea
-						id="content"
-						name="content"
-						defaultValue={data.note.content}
+						{...getInputProps(fields.content, { type: 'text' })}
 						disabled={isPending}
-						required
 						maxLength={MAX_CONTENT_LENGTH}
 						autoComplete="off"
 						autoCorrect="off"
-						aria-invalid={isContentError || undefined}
-						aria-describedby={contentErrorId}
 					/>
 					<div className="min-h-[32px] px-4 pt-1 pb-3">
-						<ErrorList errors={fieldErrors?.content} id={contentErrorId} />
+						<ErrorList
+							errors={fields?.content.errors}
+							id={fields.content.errorId}
+						/>
 					</div>
 				</div>
 				<div className={floatingToolbarClassName}>
@@ -224,7 +196,7 @@ export default function NoteEdit() {
 					</StatusButton>
 				</div>
 				<div className="min-h-[32px] px-4 pt-1 pb-3">
-					<ErrorList errors={formErrors} id={formErrorId} />
+					<ErrorList errors={form?.errors} id={form.id} />
 				</div>
 			</Form>
 		</div>
