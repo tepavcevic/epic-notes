@@ -5,6 +5,8 @@ import {
 	redirect,
 	type LoaderFunctionArgs,
 	type ActionFunctionArgs,
+	unstable_parseMultipartFormData as parseMultipartFormData,
+	unstable_createMemoryUploadHandler as createMemoryUploadHandler,
 } from '@remix-run/node'
 import {
 	Form,
@@ -17,6 +19,7 @@ import { z } from 'zod'
 import { GeneralErrorBoundary } from '#app/components/error-boundary.tsx'
 import { floatingToolbarClassName } from '#app/components/floating-toolbar.tsx'
 import { Button } from '#app/components/ui/button.tsx'
+import { ImageChooser } from '#app/components/ui/image-chooser.tsx'
 import { Input } from '#app/components/ui/input.tsx'
 import { Label } from '#app/components/ui/label.tsx'
 import { StatusButton } from '#app/components/ui/status-button.tsx'
@@ -64,8 +67,13 @@ export async function action(
 	args: Pick<ActionFunctionArgs, 'request' | 'params'>,
 ): Promise<Response> {
 	const { request, params } = args
+	invariantResponse(params.noteId, 'Invalid note ID')
 
-	const formData = await request.formData()
+	const formData = await parseMultipartFormData(
+		request,
+		createMemoryUploadHandler({ maxPartSize: 1024 * 1024 * 3 }),
+	)
+
 	const submission = parseWithZod(formData, { schema: NoteEditorSchema })
 
 	if (submission.status !== 'success') {
@@ -83,6 +91,13 @@ export async function action(
 		data: {
 			title,
 			content,
+			images: [
+				{
+					id: formData.get('imageId') ?? '',
+					file: formData.get('file') ?? null,
+					altText: formData.get('altText') ?? null,
+				},
+			],
 		},
 	})
 
@@ -129,7 +144,7 @@ export default function NoteEdit() {
 		},
 	})
 
-	console.log(fields.title.errors)
+	console.log(data)
 
 	const isPending =
 		navigation.state !== 'idle' &&
@@ -142,6 +157,7 @@ export default function NoteEdit() {
 				method="POST"
 				className="flex flex-col gap-4 p-12"
 				{...getFormProps(form)}
+				encType="multipart/form-data"
 			>
 				<div>
 					<Label htmlFor={fields.title.id}>Title</Label>
@@ -160,6 +176,7 @@ export default function NoteEdit() {
 						/>
 					</div>
 				</div>
+
 				<div>
 					<Label id={fields.content.id}>Content</Label>
 					<Textarea
@@ -176,6 +193,12 @@ export default function NoteEdit() {
 						/>
 					</div>
 				</div>
+
+				<div>
+					<Label>Image</Label>
+					<ImageChooser image={data.note.images[0]} />
+				</div>
+
 				<div className={floatingToolbarClassName}>
 					<Button
 						form={formId}
