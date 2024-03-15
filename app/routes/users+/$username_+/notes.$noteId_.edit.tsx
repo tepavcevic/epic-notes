@@ -24,11 +24,12 @@ import { Input } from '#app/components/ui/input.tsx'
 import { Label } from '#app/components/ui/label.tsx'
 import { StatusButton } from '#app/components/ui/status-button.tsx'
 import { Textarea } from '#app/components/ui/textarea.tsx'
-import { db } from '#app/utils/db.server.ts'
+import { db, updateNote } from '#app/utils/db.server.ts'
 import { invariantResponse } from '#app/utils/misc.tsx'
 
 const MAX_TITLE_LENGTH = 100
 const MAX_CONTENT_LENGTH = 10000
+const MAX_UPLOAD_SIZE = 1024 * 1024 * 3
 
 export async function loader({ params }: LoaderFunctionArgs) {
 	const note = db.note.findFirst({
@@ -61,6 +62,12 @@ const NoteEditorSchema = z.object({
 			MAX_CONTENT_LENGTH,
 			`Content must be less than ${MAX_CONTENT_LENGTH} characters`,
 		),
+	imageId: z.string().optional(),
+	altText: z.string().optional(),
+	file: z
+		.instanceof(File)
+		.optional()
+		.refine(file => file && file.size < MAX_UPLOAD_SIZE, 'File too large'),
 })
 
 export async function action(
@@ -71,7 +78,7 @@ export async function action(
 
 	const formData = await parseMultipartFormData(
 		request,
-		createMemoryUploadHandler({ maxPartSize: 1024 * 1024 * 3 }),
+		createMemoryUploadHandler({ maxPartSize: MAX_UPLOAD_SIZE }),
 	)
 
 	const submission = parseWithZod(formData, { schema: NoteEditorSchema })
@@ -80,25 +87,19 @@ export async function action(
 		return json({ status: 'error', submission }, { status: 400 })
 	}
 
-	const { title, content } = submission.value
+	const { title, content, imageId, file, altText } = submission.value
 
-	db.note.update({
-		where: {
-			id: {
-				equals: params.noteId,
+	await updateNote({
+		id: params.noteId,
+		title,
+		content,
+		images: [
+			{
+				id: imageId,
+				file,
+				altText,
 			},
-		},
-		data: {
-			title,
-			content,
-			images: [
-				{
-					id: formData.get('imageId') ?? '',
-					file: formData.get('file') ?? null,
-					altText: formData.get('altText') ?? null,
-				},
-			],
-		},
+		],
 	})
 
 	return redirect(`/users/${params.username}/notes/${params.noteId}`)

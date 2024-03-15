@@ -42,14 +42,27 @@ export async function action({ request, params }: ActionFunctionArgs) {
 }
 
 export default function NoteIdRoute() {
-	const { note } = useLoaderData<typeof loader>()
+	const data = useLoaderData<typeof loader>()
 
 	return (
 		<div className="absolute inset-0 flex flex-col px-10">
-			<h2 className="mb-2 pt-12 text-h2 lg:mb-6">{note?.title}</h2>
+			<h2 className="mb-2 pt-12 text-h2 lg:mb-6">{data.note?.title}</h2>
 			<div className="overflow-y-auto pb-24">
+				<ul className="flex flex-wrap gap-5 py-5">
+					{data.note.images.map(image => (
+						<li key={image.id}>
+							<a href={`/resources/images/${image.id}`}>
+								<img
+									src={`/resources/images/${image.id}`}
+									alt={image.altText ?? ''}
+									className="h-32 w-32 rounded-lg object-cover"
+								/>
+							</a>
+						</li>
+					))}
+				</ul>
 				<p className="whitespace-break-spaces text-sm md:text-lg">
-					{note?.content}
+					{data.note.content}
 				</p>
 			</div>
 			<div className={floatingToolbarClassName}>

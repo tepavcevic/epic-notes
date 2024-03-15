@@ -46,7 +46,7 @@ export function ImageChooser({
 								</div>
 							)}
 							{existingImage ? (
-								<input type="hidden" name="imageId" value={image?.id} />
+								<input name="imageId" type="hidden" value={image?.id} />
 							) : null}
 							<input
 								id="image-input"

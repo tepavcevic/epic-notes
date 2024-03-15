@@ -185,7 +185,7 @@ export async function updateNote({
 		data: {
 			title,
 			content,
-			images: noteImages.filter(Boolean),
+			images: noteImages.filter(Boolean) as any,
 		},
 	})
 }
