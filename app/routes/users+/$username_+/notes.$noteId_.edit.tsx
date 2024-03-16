@@ -31,21 +31,14 @@ const MAX_TITLE_LENGTH = 100
 const MAX_CONTENT_LENGTH = 10000
 const MAX_UPLOAD_SIZE = 1024 * 1024 * 3
 
-export async function loader({ params }: LoaderFunctionArgs) {
-	const note = db.note.findFirst({
-		where: {
-			id: {
-				equals: params.noteId,
-			},
-		},
-	})
-
-	invariantResponse(note, 'Note not found', { status: 404 })
-
-	return json({
-		note,
-	})
-}
+export const ImageFieldsetSchema = z.object({
+	id: z.string().optional(),
+	altText: z.string().optional(),
+	file: z
+		.instanceof(File)
+		.optional()
+		.refine(file => file && file.size < MAX_UPLOAD_SIZE, 'File too large'),
+})
 
 const NoteEditorSchema = z.object({
 	title: z
@@ -62,13 +55,24 @@ const NoteEditorSchema = z.object({
 			MAX_CONTENT_LENGTH,
 			`Content must be less than ${MAX_CONTENT_LENGTH} characters`,
 		),
-	imageId: z.string().optional(),
-	altText: z.string().optional(),
-	file: z
-		.instanceof(File)
-		.optional()
-		.refine(file => file && file.size < MAX_UPLOAD_SIZE, 'File too large'),
+	image: ImageFieldsetSchema,
 })
+
+export async function loader({ params }: LoaderFunctionArgs) {
+	const note = db.note.findFirst({
+		where: {
+			id: {
+				equals: params.noteId,
+			},
+		},
+	})
+
+	invariantResponse(note, 'Note not found', { status: 404 })
+
+	return json({
+		note,
+	})
+}
 
 export async function action(
 	args: Pick<ActionFunctionArgs, 'request' | 'params'>,
@@ -87,19 +91,13 @@ export async function action(
 		return json({ status: 'error', submission }, { status: 400 })
 	}
 
-	const { title, content, imageId, file, altText } = submission.value
+	const { title, content, image } = submission.value
 
 	await updateNote({
 		id: params.noteId,
 		title,
 		content,
-		images: [
-			{
-				id: imageId,
-				file,
-				altText,
-			},
-		],
+		images: [image],
 	})
 
 	return redirect(`/users/${params.username}/notes/${params.noteId}`)
@@ -142,6 +140,7 @@ export default function NoteEdit() {
 		defaultValue: {
 			title: data.note.title,
 			content: data.note.content,
+			image: data.note.images[0],
 		},
 	})
 
@@ -197,7 +196,7 @@ export default function NoteEdit() {
 
 				<div>
 					<Label>Image</Label>
-					<ImageChooser image={data.note.images[0]} />
+					<ImageChooser config={fields.image.getFieldset()} />
 				</div>
 
 				<div className={floatingToolbarClassName}>

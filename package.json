@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@conform-to/react": "^1.0.4",
+    "@conform-to/dom": "^1.0.4",
     "@conform-to/zod": "^1.0.4",
     "@mswjs/data": "^0.16.1",
     "@radix-ui/react-label": "^2.0.2",

@@ -1,18 +1,22 @@
+import { type FieldName } from '@conform-to/dom'
 import { useState } from 'react'
+import { type z } from 'zod'
+import { type ImageFieldsetSchema } from '#app/routes/users+/$username_+/notes.$noteId_.edit.tsx'
 import { cn } from '#app/utils/misc.tsx'
 import { Label } from './label.tsx'
 import { Textarea } from './textarea.tsx'
 
 export function ImageChooser({
-	image,
+	config,
 }: {
-	image?: { id: string; altText?: string | null }
+	config: FieldName<z.infer<typeof ImageFieldsetSchema>>
 }) {
-	const existingImage = Boolean(image)
+	const existingImage =
+		typeof config === 'object' && 'id' in config && 'file' in config
 	const [previewImage, setPreviewImage] = useState<string | null>(
-		existingImage ? `/resources/images/${image?.id}` : null,
+		existingImage ? `/resources/images/${config?.id}` : null,
 	)
-	const [altText, setAltText] = useState(image?.altText ?? '')
+	const [altText, setAltText] = useState(config?.altText ?? '')
 
 	return (
 		<fieldset>
@@ -46,7 +50,7 @@ export function ImageChooser({
 								</div>
 							)}
 							{existingImage ? (
-								<input name="imageId" type="hidden" value={image?.id} />
+								<input name="imageId" type="hidden" value={config.id} />
 							) : null}
 							<input
 								id="image-input"
