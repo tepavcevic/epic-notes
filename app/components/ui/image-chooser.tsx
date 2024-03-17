@@ -62,6 +62,8 @@ export function ImageChooser({
 								/>
 							) : null}
 							<input
+								{...getInputProps(fields.file, { type: 'file' })}
+								aria-label="Image"
 								className="absolute left-0 top-0 z-0 h-32 w-32 cursor-pointer opacity-0"
 								onChange={event => {
 									const file = event.target.files?.[0]
@@ -76,16 +78,17 @@ export function ImageChooser({
 										setPreviewImage(null)
 									}
 								}}
-								type="file"
 								accept="image/*"
 							/>
 						</label>
 					</div>
 				</div>
 				<div className="flex-1">
-					<Label htmlFor="alt-text">Alt Text</Label>
+					<Label htmlFor={fields.altText.id}>Alt Text</Label>
 					<Textarea
-						defaultValue={altText}
+						{...getInputProps(fields.altText, {
+							type: 'text',
+						})}
 						onChange={e => setAltText(e.currentTarget.value)}
 					/>
 				</div>

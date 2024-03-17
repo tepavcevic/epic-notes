@@ -67,6 +67,8 @@ export async function loader({ params }: LoaderFunctionArgs) {
 		},
 	})
 
+	console.log('form action')
+
 	invariantResponse(note, 'Note not found', { status: 404 })
 
 	return json({
