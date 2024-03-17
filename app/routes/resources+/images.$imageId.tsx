@@ -12,6 +12,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
 	const image = db.image.findFirst({
 		where: { id: { equals: params.imageId } },
 	})
+
 	invariantResponse(image, 'Image not found', { status: 404 })
 
 	const { filepath, contentType } = image

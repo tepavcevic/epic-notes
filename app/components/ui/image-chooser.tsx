@@ -1,4 +1,8 @@
-import { type FieldName } from '@conform-to/dom'
+import {
+	getFieldsetProps,
+	type FieldMetadata,
+	getInputProps,
+} from '@conform-to/react'
 import { useState } from 'react'
 import { type z } from 'zod'
 import { type ImageFieldsetSchema } from '#app/routes/users+/$username_+/notes.$noteId_.edit.tsx'
@@ -9,22 +13,23 @@ import { Textarea } from './textarea.tsx'
 export function ImageChooser({
 	config,
 }: {
-	config: FieldName<z.infer<typeof ImageFieldsetSchema>>
+	config: FieldMetadata<z.infer<typeof ImageFieldsetSchema>>
 }) {
-	const existingImage =
-		typeof config === 'object' && 'id' in config && 'file' in config
+	const fields = config.getFieldset()
+	const existingImage = Boolean(fields.id.initialValue)
+
 	const [previewImage, setPreviewImage] = useState<string | null>(
-		existingImage ? `/resources/images/${config?.id}` : null,
+		existingImage ? `/resources/images/${fields.id.value}` : null,
 	)
-	const [altText, setAltText] = useState(config?.altText ?? '')
+	const [altText, setAltText] = useState(fields.altText.initialValue ?? '')
 
 	return (
-		<fieldset>
+		<fieldset {...getFieldsetProps(config)}>
 			<div className="flex gap-3">
 				<div className="w-32">
 					<div className="relative h-32 w-32">
 						<label
-							htmlFor="image-input"
+							htmlFor={fields.id.id}
 							className={cn('group absolute h-32 w-32 rounded-lg', {
 								'bg-accent opacity-40 focus-within:opacity-100 hover:opacity-100':
 									!previewImage,
@@ -50,11 +55,13 @@ export function ImageChooser({
 								</div>
 							)}
 							{existingImage ? (
-								<input name="imageId" type="hidden" value={config.id} />
+								<input
+									{...getInputProps(fields.file, {
+										type: 'hidden',
+									})}
+								/>
 							) : null}
 							<input
-								id="image-input"
-								aria-label="Image"
 								className="absolute left-0 top-0 z-0 h-32 w-32 cursor-pointer opacity-0"
 								onChange={event => {
 									const file = event.target.files?.[0]
@@ -69,7 +76,6 @@ export function ImageChooser({
 										setPreviewImage(null)
 									}
 								}}
-								name="file"
 								type="file"
 								accept="image/*"
 							/>
@@ -79,8 +85,6 @@ export function ImageChooser({
 				<div className="flex-1">
 					<Label htmlFor="alt-text">Alt Text</Label>
 					<Textarea
-						id="alt-text"
-						name="altText"
 						defaultValue={altText}
 						onChange={e => setAltText(e.currentTarget.value)}
 					/>

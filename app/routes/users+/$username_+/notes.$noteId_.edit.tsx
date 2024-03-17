@@ -196,7 +196,7 @@ export default function NoteEdit() {
 
 				<div>
 					<Label>Image</Label>
-					<ImageChooser config={fields.image.getFieldset()} />
+					<ImageChooser config={fields.image} />
 				</div>
 
 				<div className={floatingToolbarClassName}>
