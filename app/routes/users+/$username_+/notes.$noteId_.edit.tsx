@@ -55,7 +55,7 @@ const NoteEditorSchema = z.object({
 			MAX_CONTENT_LENGTH,
 			`Content must be less than ${MAX_CONTENT_LENGTH} characters`,
 		),
-	image: ImageFieldsetSchema,
+	images: z.array(ImageFieldsetSchema),
 })
 
 export async function loader({ params }: LoaderFunctionArgs) {
@@ -66,8 +66,6 @@ export async function loader({ params }: LoaderFunctionArgs) {
 			},
 		},
 	})
-
-	console.log('form action')
 
 	invariantResponse(note, 'Note not found', { status: 404 })
 
@@ -87,19 +85,21 @@ export async function action(
 		createMemoryUploadHandler({ maxPartSize: MAX_UPLOAD_SIZE }),
 	)
 
-	const submission = parseWithZod(formData, { schema: NoteEditorSchema })
+	const submission = parseWithZod(formData, {
+		schema: NoteEditorSchema,
+	})
 
 	if (submission.status !== 'success') {
-		return json({ status: 'error', submission }, { status: 400 })
+		return json(submission.reply())
 	}
 
-	const { title, content, image } = submission.value
+	const { title, content, images } = submission.value
 
 	await updateNote({
 		id: params.noteId,
 		title,
 		content,
-		images: [image],
+		images: images,
 	})
 
 	return redirect(`/users/${params.username}/notes/${params.noteId}`)
@@ -142,11 +142,11 @@ export default function NoteEdit() {
 		defaultValue: {
 			title: data.note.title,
 			content: data.note.content,
-			image: data.note.images[0],
+			images: data.note.images.length ? data.note.images : [{}],
 		},
 	})
 
-	console.log(data)
+	const imageList = fields.images.getFieldList()
 
 	const isPending =
 		navigation.state !== 'idle' &&
@@ -197,13 +197,36 @@ export default function NoteEdit() {
 				</div>
 
 				<div>
-					<Label>Image</Label>
-					<ImageChooser config={fields.image} />
+					<Label>Images</Label>
+					<ul className="flex flex-col gap-4">
+						{imageList.map((image, index) => (
+							<li
+								className="relative border-b-2 border-muted-foreground pb-4"
+								key={image.key}
+							>
+								<button
+									{...form.remove.getButtonProps({
+										name: fields.images.name,
+										index,
+									})}
+									className="absolute top-0 right-0 text-destructive"
+								>
+									<span className="sr-only">Delete image {index + 1}</span>
+									<span aria-hidden>❌</span>
+								</button>
+								<ImageChooser config={image} />
+							</li>
+						))}
+					</ul>
 				</div>
+				<Button {...form.insert.getButtonProps({ name: fields.images.name })}>
+					<span className="sr-only">Add image</span>
+					<span aria-hidden>➕ Image</span>
+				</Button>
 
 				<div className={floatingToolbarClassName}>
 					<Button
-						form={formId}
+						form={form.id}
 						type="reset"
 						variant="destructive"
 						className="mr-2"
@@ -212,7 +235,7 @@ export default function NoteEdit() {
 						Reset Form
 					</Button>
 					<StatusButton
-						form={formId}
+						form={form.id}
 						status={isPending ? 'pending' : 'idle'}
 						type="submit"
 						disabled={isPending}

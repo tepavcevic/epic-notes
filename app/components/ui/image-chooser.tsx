@@ -29,7 +29,7 @@ export function ImageChooser({
 				<div className="w-32">
 					<div className="relative h-32 w-32">
 						<label
-							htmlFor={fields.id.id}
+							htmlFor={fields.file.id}
 							className={cn('group absolute h-32 w-32 rounded-lg', {
 								'bg-accent opacity-40 focus-within:opacity-100 hover:opacity-100':
 									!previewImage,
