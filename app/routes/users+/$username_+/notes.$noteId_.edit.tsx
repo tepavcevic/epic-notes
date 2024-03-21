@@ -161,6 +161,7 @@ export default function NoteEdit() {
 				{...getFormProps(form)}
 				encType="multipart/form-data"
 			>
+				<button type="submit" className="hidden" />
 				<div>
 					<Label htmlFor={fields.title.id}>Title</Label>
 					<Input
