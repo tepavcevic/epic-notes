@@ -11,8 +11,8 @@
     "typecheck": "tsc"
   },
   "dependencies": {
-    "@conform-to/react": "^1.0.4",
     "@conform-to/dom": "^1.0.4",
+    "@conform-to/react": "^1.0.4",
     "@conform-to/zod": "^1.0.4",
     "@mswjs/data": "^0.16.1",
     "@radix-ui/react-label": "^2.0.2",
@@ -22,9 +22,11 @@
     "@remix-run/react": "^2.8.0",
     "@remix-run/serve": "^2.8.0",
     "class-variance-authority": "^0.7.0",
+    "crypto-js": "^4.2.0",
     "isbot": "^3.6.8",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "remix-utils": "^7.1.0",
     "tailwind-merge": "^2.2.1",
     "zod": "^3.22.4"
   },
