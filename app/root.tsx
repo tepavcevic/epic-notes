@@ -13,20 +13,19 @@ import {
 } from '@remix-run/react'
 import faviconAssetUrl from './assets/favicon.svg'
 import { GeneralErrorBoundary } from './components/error-boundary.tsx'
-import fontStylesheetUrl from './styles/font.css'
+import fontStylestylesheetUrl from './styles/font.css'
 import tailwindStylesheetUrl from './styles/tailwind.css'
 import { getEnv } from './utils/env.server.ts'
 
 export const links: LinksFunction = () => {
 	return [
 		{ rel: 'icon', type: 'image/svg+xml', href: faviconAssetUrl },
-		{ rel: 'stylesheet', href: fontStylesheetUrl },
+		{ rel: 'stylesheet', href: fontStylestylesheetUrl },
 		{ rel: 'stylesheet', href: tailwindStylesheetUrl },
-	]
+	].filter(Boolean)
 }
 
 export async function loader() {
-	// throw new Error('🐨 root loader error')
 	return json({ username: os.userInfo().username, ENV: getEnv() })
 }
 
@@ -50,7 +49,6 @@ function Document({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-	// throw new Error('🐨 root component error')
 	const data = useLoaderData<typeof loader>()
 	return (
 		<Document>
@@ -60,8 +58,8 @@ export default function App() {
 						<div className="font-light">epic</div>
 						<div className="font-bold">notes</div>
 					</Link>
-					<Link className="underline" to="users/kody">
-						Kody
+					<Link className="underline" to="/signup">
+						Signup
 					</Link>
 				</nav>
 			</header>
