@@ -11,11 +11,13 @@ import {
 	useLoaderData,
 	type MetaFunction,
 } from '@remix-run/react'
+import { HoneypotProvider } from 'remix-utils/honeypot/react'
 import faviconAssetUrl from './assets/favicon.svg'
 import { GeneralErrorBoundary } from './components/error-boundary.tsx'
 import fontStylestylesheetUrl from './styles/font.css'
 import tailwindStylesheetUrl from './styles/tailwind.css'
 import { getEnv } from './utils/env.server.ts'
+import { honeypot } from './utils/honeypot.server.ts'
 
 export const links: LinksFunction = () => {
 	return [
@@ -26,7 +28,8 @@ export const links: LinksFunction = () => {
 }
 
 export async function loader() {
-	return json({ username: os.userInfo().username, ENV: getEnv() })
+	const honeyProps = honeypot.getInputProps()
+	return json({ username: os.userInfo().username, ENV: getEnv(), honeyProps })
 }
 
 function Document({ children }: { children: React.ReactNode }) {
@@ -48,7 +51,7 @@ function Document({ children }: { children: React.ReactNode }) {
 	)
 }
 
-export default function App() {
+function App() {
 	const data = useLoaderData<typeof loader>()
 	return (
 		<Document>
@@ -82,6 +85,15 @@ export default function App() {
 				}}
 			/>
 		</Document>
+	)
+}
+
+export default function AppWithProviders() {
+	const loaderData = useLoaderData<typeof loader>()
+	return (
+		<HoneypotProvider {...loaderData.honeyProps}>
+			<App />
+		</HoneypotProvider>
 	)
 }
 
