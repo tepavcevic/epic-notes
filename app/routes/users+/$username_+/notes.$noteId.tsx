@@ -5,9 +5,12 @@ import {
 	type ActionFunctionArgs,
 } from '@remix-run/node'
 import { Form, Link, type MetaFunction, useLoaderData } from '@remix-run/react'
+import { AuthenticityTokenInput } from 'remix-utils/csrf/react'
+import { CSRFError } from 'remix-utils/csrf/server'
 import { GeneralErrorBoundary } from '#app/components/error-boundary.tsx'
 import { floatingToolbarClassName } from '#app/components/floating-toolbar.tsx'
 import { Button } from '#app/components/ui/button.tsx'
+import { csrf } from '#app/utils/csrf.server.ts'
 import { db } from '#app/utils/db.server.ts'
 import { invariantResponse } from '../../../utils/misc.tsx'
 import { type loader as noteLoader } from './notes.tsx'
@@ -28,6 +31,15 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
 export async function action({ request, params }: ActionFunctionArgs) {
 	const formData = await request.formData()
+	try {
+		await csrf.validate(formData, request.headers)
+	} catch (error) {
+		if (error instanceof CSRFError) {
+			throw new Response('Invalid CSRF token', { status: 403 })
+		}
+		throw error
+	}
+
 	const intent = formData.get('intent')
 
 	switch (intent) {
@@ -67,6 +79,7 @@ export default function NoteIdRoute() {
 			</div>
 			<div className={floatingToolbarClassName}>
 				<Form method="POST">
+					<AuthenticityTokenInput />
 					<Button
 						name="intent"
 						value="delete"

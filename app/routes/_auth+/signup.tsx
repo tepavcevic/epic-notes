@@ -22,7 +22,7 @@ export async function action({ request }: LoaderFunctionArgs) {
 		throw error
 	}
 
-	return redirect('/')
+	return redirect('/users/kody')
 }
 
 export default function SignupRoute() {
