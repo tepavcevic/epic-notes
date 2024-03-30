@@ -71,10 +71,11 @@ app.use(express.static('public', { maxAge: '1h' }))
 morgan.token('url', req => decodeURIComponent(req.url ?? ''))
 app.use(morgan('tiny'))
 
+const maxMultiple = process.env.NODE_ENV === 'test' ? 10_000 : 1
 app.use(
 	rateLimit({
 		windowMs: 60 * 1_000,
-		limit: 1_000,
+		limit: 1_000 * maxMultiple,
 		standardHeaders: true,
 		legacyHeaders: true,
 	}),
