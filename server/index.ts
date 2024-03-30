@@ -72,14 +72,34 @@ morgan.token('url', req => decodeURIComponent(req.url ?? ''))
 app.use(morgan('tiny'))
 
 const maxMultiple = process.env.NODE_ENV === 'test' ? 10_000 : 1
-app.use(
-	rateLimit({
-		windowMs: 60 * 1_000,
-		limit: 1_000 * maxMultiple,
-		standardHeaders: true,
-		legacyHeaders: true,
-	}),
-)
+const rateLimitDefault = {
+	windowMs: 60 * 1_000,
+	limit: 1_000 * maxMultiple,
+	standardHeaders: true,
+	legacyHeaders: true,
+}
+
+const strongestRateLimit = rateLimit({
+	...rateLimitDefault,
+	limit: 10 * maxMultiple,
+})
+const strongRateLimit = rateLimit({
+	...rateLimitDefault,
+	limit: 100 * maxMultiple,
+})
+const generalRateLimit = rateLimit(rateLimitDefault)
+
+app.use((req, res, next) => {
+	const strongPaths = ['/signup']
+	if (req.method !== 'GET' && req.method !== 'HEAD') {
+		if (strongPaths.some(path => req.path.includes(path))) {
+			return strongestRateLimit(req, res, next)
+		}
+		return strongRateLimit(req, res, next)
+	}
+
+	return generalRateLimit(req, res, next)
+})
 
 app.all(
 	'*',
