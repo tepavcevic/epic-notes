@@ -19,7 +19,7 @@ export const meta: MetaFunction<
 		match => match.id === 'routes/users+/$username_+/notes',
 	)
 	const notesData = notesMatch?.data
-	const noteCount = notesData?.notes.length ?? 0
+	const noteCount = notesData?.owner.notes.length ?? 0
 	const displayName = notesData?.owner.name ?? params.username
 	const noteText = noteCount === 1 ? 'note' : 'notes'
 

@@ -11,16 +11,17 @@ import { GeneralErrorBoundary } from '#app/components/error-boundary.tsx'
 import { floatingToolbarClassName } from '#app/components/floating-toolbar.tsx'
 import { Button } from '#app/components/ui/button.tsx'
 import { csrf } from '#app/utils/csrf.server.ts'
-import { db } from '#app/utils/db.server.ts'
+import { prisma } from '#app/utils/db.server.ts'
 import { invariantResponse } from '../../../utils/misc.tsx'
 import { type loader as noteLoader } from './notes.tsx'
 
 export async function loader({ params }: LoaderFunctionArgs) {
-	const note = db.note.findFirst({
-		where: {
-			id: {
-				equals: params.noteId,
-			},
+	const note = await prisma.note.findUnique({
+		where: { id: params.noteId },
+		select: {
+			title: true,
+			content: true,
+			images: { select: { id: true, altText: true } },
 		},
 	})
 
@@ -44,7 +45,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
 	switch (intent) {
 		case 'delete': {
-			db.note.delete({ where: { id: { equals: params.noteId } } })
+			await prisma.note.delete({ where: { id: params.noteId } })
 			return redirect(`/users/${params.username}/notes`)
 		}
 

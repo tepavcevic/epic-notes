@@ -1,28 +1,23 @@
 import {
 	redirect,
-	type LoaderFunctionArgs,
+	type DataFunctionArgs,
 	type MetaFunction,
 } from '@remix-run/node'
 import { Form } from '@remix-run/react'
+import { AuthenticityTokenInput } from 'remix-utils/csrf/react'
 import { HoneypotInputs } from 'remix-utils/honeypot/react'
-import { SpamError } from 'remix-utils/honeypot/server'
 import { Button } from '#app/components/ui/button.tsx'
 import { Input } from '#app/components/ui/input.tsx'
 import { Label } from '#app/components/ui/label.tsx'
-import { honeypot } from '#app/utils/honeypot.server.ts'
+import { validateCSRF } from '#app/utils/csrf.server.ts'
+import { checkHoneypot } from '#app/utils/honeypot.server.ts'
 
-export async function action({ request }: LoaderFunctionArgs) {
+export async function action({ request }: DataFunctionArgs) {
 	const formData = await request.formData()
-	try {
-		honeypot.check(formData)
-	} catch (error) {
-		if (error instanceof SpamError) {
-			throw new Response('Invalid request', { status: 400 })
-		}
-		throw error
-	}
-
-	return redirect('/users/kody')
+	await validateCSRF(formData, request.headers)
+	checkHoneypot(formData)
+	// TODO: implement signup
+	return redirect('/')
 }
 
 export default function SignupRoute() {
@@ -39,6 +34,7 @@ export default function SignupRoute() {
 					method="POST"
 					className="mx-auto flex min-w-[368px] max-w-sm flex-col gap-4"
 				>
+					<AuthenticityTokenInput />
 					<HoneypotInputs />
 					<div>
 						<Label htmlFor="email-input">Email</Label>

@@ -3,13 +3,13 @@ import { prisma } from '#app/utils/db.server.ts'
 import { invariantResponse } from '#app/utils/misc.tsx'
 
 export async function loader({ params }: LoaderFunctionArgs) {
-	invariantResponse(params.imageId, 'Invalid image ID')
-	const image = await prisma.noteImage.findUnique({
+	invariantResponse(params.imageId, 'Image ID is required', { status: 400 })
+	const image = await prisma.userImage.findUnique({
 		where: { id: params.imageId },
 		select: { contentType: true, blob: true },
 	})
 
-	invariantResponse(image, 'Image not found', { status: 404 })
+	invariantResponse(image, 'Not found', { status: 404 })
 
 	return new Response(image.blob, {
 		headers: {
