@@ -1,5 +1,6 @@
 import { getFormProps, getInputProps, useForm } from '@conform-to/react'
 import { getZodConstraint, parseWithZod } from '@conform-to/zod'
+import { createId as cuid } from '@paralleldrive/cuid2'
 import {
 	json,
 	redirect,
@@ -15,6 +16,7 @@ import {
 	useLoaderData,
 	useNavigation,
 } from '@remix-run/react'
+import { AuthenticityTokenInput } from 'remix-utils/csrf/react'
 import { z } from 'zod'
 import { GeneralErrorBoundary } from '#app/components/error-boundary.tsx'
 import { floatingToolbarClassName } from '#app/components/floating-toolbar.tsx'
@@ -24,10 +26,13 @@ import { Input } from '#app/components/ui/input.tsx'
 import { Label } from '#app/components/ui/label.tsx'
 import { StatusButton } from '#app/components/ui/status-button.tsx'
 import { Textarea } from '#app/components/ui/textarea.tsx'
-import { db, updateNote } from '#app/utils/db.server.ts'
+import { validateCSRF } from '#app/utils/csrf.server.ts'
+import { prisma } from '#app/utils/db.server.ts'
 import { invariantResponse } from '#app/utils/misc.tsx'
 
+const MIN_TITLE_LENGTH = 1
 const MAX_TITLE_LENGTH = 100
+const MIN_CONTENT_LENGTH = 1
 const MAX_CONTENT_LENGTH = 10000
 const MAX_UPLOAD_SIZE = 1024 * 1024 * 3
 
@@ -40,29 +45,34 @@ export const ImageFieldsetSchema = z.object({
 		.refine(file => file && file.size < MAX_UPLOAD_SIZE, 'File too large'),
 })
 
+type ImageFieldset = z.infer<typeof ImageFieldsetSchema>
+
+function imageHasFile(
+	image: ImageFieldset,
+): image is ImageFieldset & { file: NonNullable<ImageFieldset['file']> } {
+	return Boolean(image.file?.size && image.file?.size > 0)
+}
+
+function imageHasId(
+	image: ImageFieldset,
+): image is ImageFieldset & { id: NonNullable<ImageFieldset['id']> } {
+	return image.id != null
+}
+
 const NoteEditorSchema = z.object({
-	title: z
-		.string({ required_error: 'Title is required' })
-		.min(1, 'Title is required')
-		.max(
-			MAX_TITLE_LENGTH,
-			`Title must be less than ${MAX_TITLE_LENGTH} characters`,
-		),
-	content: z
-		.string({ required_error: 'Content is required' })
-		.min(1, 'Content is required')
-		.max(
-			MAX_CONTENT_LENGTH,
-			`Content must be less than ${MAX_CONTENT_LENGTH} characters`,
-		),
-	images: z.array(ImageFieldsetSchema),
+	title: z.string().min(MIN_TITLE_LENGTH).max(MAX_TITLE_LENGTH),
+	content: z.string().min(MIN_CONTENT_LENGTH).max(MAX_CONTENT_LENGTH),
+	images: z.array(ImageFieldsetSchema).max(5).optional(),
 })
 
 export async function loader({ params }: LoaderFunctionArgs) {
-	const note = db.note.findFirst({
-		where: {
-			id: {
-				equals: params.noteId,
+	const note = await prisma.note.findFirst({
+		where: { id: params.noteId },
+		select: {
+			title: true,
+			content: true,
+			images: {
+				select: { id: true, altText: true },
 			},
 		},
 	})
@@ -85,22 +95,73 @@ export async function action(
 		createMemoryUploadHandler({ maxPartSize: MAX_UPLOAD_SIZE }),
 	)
 
-	const submission = parseWithZod(formData, {
-		schema: NoteEditorSchema,
+	await validateCSRF(formData, request.headers)
+
+	const submission = await parseWithZod(formData, {
+		schema: NoteEditorSchema.transform(async ({ images = [], ...data }) => {
+			return {
+				...data,
+				imageUpdates: await Promise.all(
+					images.filter(imageHasId).map(async i => {
+						if (imageHasFile(i)) {
+							return {
+								id: i.id,
+								altText: i.altText,
+								contentType: i.file.type,
+								blob: Buffer.from(await i.file.arrayBuffer()),
+							}
+						} else {
+							return { id: i.id, altText: i.altText }
+						}
+					}),
+				),
+				newImages: await Promise.all(
+					images
+						.filter(imageHasFile)
+						.filter(i => !i.id)
+						.map(async image => {
+							return {
+								altText: image.altText,
+								contentType: image.file.type,
+								blob: Buffer.from(await image.file.arrayBuffer()),
+							}
+						}),
+				),
+			}
+		}),
+		async: true,
 	})
 
 	if (submission.status !== 'success') {
 		return json(submission.reply())
 	}
 
-	const { title, content, images } = submission.value
+	const { title, content, imageUpdates = [], newImages = [] } = submission.value
 
-	await updateNote({
-		id: params.noteId,
-		title,
-		content,
-		images: images,
+	await prisma.note.update({
+		where: { id: params.noteId },
+		data: { title, content },
 	})
+
+	await prisma.noteImage.deleteMany({
+		where: {
+			noteId: params.noteId,
+			id: { notIn: imageUpdates.map(i => i.id) },
+		},
+	})
+
+	for (const updates of imageUpdates) {
+		await prisma.noteImage.update({
+			where: { id: updates.id },
+			data: { ...updates, id: updates.blob ? cuid() : updates.id },
+		})
+	}
+
+	for (const newImage of newImages) {
+		await prisma.noteImage.create({
+			data: { ...newImage, noteId: params.noteId },
+		})
+	}
 
 	return redirect(`/users/${params.username}/notes/${params.noteId}`)
 }
@@ -142,7 +203,7 @@ export default function NoteEdit() {
 		defaultValue: {
 			title: data.note.title,
 			content: data.note.content,
-			images: data.note.images.length ? data.note.images : [{}],
+			images: data.note.images?.length ? data.note.images : [{}],
 		},
 	})
 
@@ -157,12 +218,14 @@ export default function NoteEdit() {
 		<div className="absolute inset-0">
 			<Form
 				method="POST"
-				className="flex flex-col gap-4 p-12"
+				className="flex h-full flex-col gap-y-4 overflow-y-auto overflow-x-hidden px-10 pb-28 pt-12"
 				{...getFormProps(form)}
 				encType="multipart/form-data"
 			>
+				<AuthenticityTokenInput />
+
 				<button type="submit" className="hidden" />
-				<div>
+				<div className="flex flex-col gap-1">
 					<Label htmlFor={fields.title.id}>Title</Label>
 					<Input
 						{...getInputProps(fields.title, { type: 'text' })}
