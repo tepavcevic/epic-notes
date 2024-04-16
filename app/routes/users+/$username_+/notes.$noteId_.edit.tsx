@@ -88,7 +88,9 @@ export async function action(
 	args: Pick<ActionFunctionArgs, 'request' | 'params'>,
 ): Promise<Response> {
 	const { request, params } = args
-	invariantResponse(params.noteId, 'Invalid note ID')
+	const { noteId, username } = params
+
+	invariantResponse(noteId, 'Invalid note ID')
 
 	const formData = await parseMultipartFormData(
 		request,
@@ -138,32 +140,34 @@ export async function action(
 
 	const { title, content, imageUpdates = [], newImages = [] } = submission.value
 
-	await prisma.note.update({
-		where: { id: params.noteId },
-		data: { title, content },
+	await prisma.$transaction(async $prisma => {
+		await $prisma.note.update({
+			where: { id: noteId },
+			data: { title, content },
+		})
+
+		await $prisma.noteImage.deleteMany({
+			where: {
+				noteId,
+				id: { notIn: imageUpdates.map(i => i.id) },
+			},
+		})
+
+		for (const updates of imageUpdates) {
+			await $prisma.noteImage.update({
+				where: { id: updates.id },
+				data: { ...updates, id: updates.blob ? cuid() : updates.id },
+			})
+		}
+
+		for (const newImage of newImages) {
+			await $prisma.noteImage.create({
+				data: { ...newImage, noteId },
+			})
+		}
 	})
 
-	await prisma.noteImage.deleteMany({
-		where: {
-			noteId: params.noteId,
-			id: { notIn: imageUpdates.map(i => i.id) },
-		},
-	})
-
-	for (const updates of imageUpdates) {
-		await prisma.noteImage.update({
-			where: { id: updates.id },
-			data: { ...updates, id: updates.blob ? cuid() : updates.id },
-		})
-	}
-
-	for (const newImage of newImages) {
-		await prisma.noteImage.create({
-			data: { ...newImage, noteId: params.noteId },
-		})
-	}
-
-	return redirect(`/users/${params.username}/notes/${params.noteId}`)
+	return redirect(`/users/${username}/notes/${noteId}`)
 }
 
 function ErrorList({
