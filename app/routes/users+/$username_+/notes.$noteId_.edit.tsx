@@ -140,31 +140,21 @@ export async function action(
 
 	const { title, content, imageUpdates = [], newImages = [] } = submission.value
 
-	await prisma.$transaction(async $prisma => {
-		await $prisma.note.update({
-			where: { id: noteId },
-			data: { title, content },
-		})
-
-		await $prisma.noteImage.deleteMany({
-			where: {
-				noteId,
-				id: { notIn: imageUpdates.map(i => i.id) },
+	await prisma.note.update({
+		select: { id: true },
+		where: { id: noteId },
+		data: {
+			title,
+			content,
+			images: {
+				deleteMany: { id: { notIn: imageUpdates.map(i => i.id) } },
+				updateMany: imageUpdates.map(update => ({
+					where: { id: update.id },
+					data: { ...update, id: update.blob ? cuid() : update.id },
+				})),
+				create: newImages,
 			},
-		})
-
-		for (const updates of imageUpdates) {
-			await $prisma.noteImage.update({
-				where: { id: updates.id },
-				data: { ...updates, id: updates.blob ? cuid() : updates.id },
-			})
-		}
-
-		for (const newImage of newImages) {
-			await $prisma.noteImage.create({
-				data: { ...newImage, noteId },
-			})
-		}
+		},
 	})
 
 	return redirect(`/users/${username}/notes/${noteId}`)
