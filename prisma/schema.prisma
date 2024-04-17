@@ -30,6 +30,10 @@ model Note {
   owner     User        @relation(references: [id], fields: [ownerId], onDelete: Cascade, onUpdate: Cascade)
   ownerId   String
   images    NoteImage[]
+
+  @@index([ownerId])
+  // this speeds up user search
+  @@index([ownerId, updatedAt])
 }
 
 model UserImage {
@@ -52,4 +56,6 @@ model NoteImage {
   updatedAt   DateTime @updatedAt
   note        Note     @relation(references: [id], fields: [noteId], onDelete: Cascade, onUpdate: Cascade)
   noteId      String
+
+  @@index([noteId])
 }

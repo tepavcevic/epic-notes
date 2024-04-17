@@ -10,10 +10,12 @@ export function SearchBar({
 	status,
 	autoFocus = false,
 	autoSubmit = false,
+	autoComplete = 'off',
 }: {
 	status: 'idle' | 'pending' | 'success' | 'error'
 	autoFocus?: boolean
 	autoSubmit?: boolean
+	autoComplete?: 'on' | 'off'
 }) {
 	const id = useId()
 	const [searchParams] = useSearchParams()
@@ -46,6 +48,7 @@ export function SearchBar({
 					placeholder="Search"
 					className="w-full"
 					autoFocus={autoFocus}
+					autoComplete={autoComplete}
 				/>
 			</div>
 			<div>

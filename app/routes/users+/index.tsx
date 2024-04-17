@@ -1,29 +1,55 @@
 import { json, redirect, type LoaderFunctionArgs } from '@remix-run/node'
 import { Link, useLoaderData } from '@remix-run/react'
+import { z } from 'zod'
 import { GeneralErrorBoundary } from '#app/components/error-boundary.tsx'
+import { ErrorList } from '#app/components/forms.tsx'
 import { SearchBar } from '#app/components/search-bar.tsx'
 import { prisma } from '#app/utils/db.server.ts'
 import { cn, getUserImgSrc, useDelayedIsPending } from '#app/utils/misc.tsx'
+
+const UserSearchResultSchema = z.object({
+	id: z.string(),
+	username: z.string(),
+	name: z.string().nullable(),
+	imageId: z.string().nullable(),
+})
+
+const UserSearchResultsSchema = z.array(UserSearchResultSchema)
 
 export async function loader({ request }: LoaderFunctionArgs) {
 	const searchTerm = new URL(request.url).searchParams.get('search')
 	if (searchTerm === '') {
 		return redirect('/users')
 	}
-	const users = await prisma.user.findMany({
-		where: {
-			username: searchTerm ?? '',
-		},
-	})
+	const likeUsername = `%${searchTerm ?? ''}%`
+
+	const rawUsers = await prisma.$queryRaw`
+    SELECT User.id, User.username, User.name, UserImage.id AS imageId
+    FROM User
+    LEFT JOIN UserImage ON User.id = UserImage.userId
+    WHERE User.username LIKE ${likeUsername}
+    OR User.name LIKE ${likeUsername}
+    ORDER BY (
+      SELECT Note.updatedAt
+      FROM Note
+      WHERE Note.ownerId = User.id
+      ORDER BY Note.updatedAt desc
+      LIMIT 1
+    )
+    LIMIT 50
+  `
+
+	const result = UserSearchResultsSchema.safeParse(rawUsers)
+
+	if (!result.success) {
+		return json({ status: 'error', error: result.error.message } as const, {
+			status: 400,
+		})
+	}
 
 	return json({
 		status: 'idle',
-		users: users.map(u => ({
-			id: u.id,
-			username: u.username,
-			name: u.name,
-			image: u?.image ? { id: u.image.id } : undefined,
-		})),
+		users: result.data,
 	} as const)
 }
 
@@ -33,6 +59,10 @@ export default function UsersRoute() {
 		formMethod: 'GET',
 		formAction: '/users',
 	})
+
+	if (data.status === 'error') {
+		console.error(data.error)
+	}
 
 	return (
 		<div className="container mb-48 mt-36 flex flex-col items-center justify-center gap-6">
@@ -57,7 +87,7 @@ export default function UsersRoute() {
 									>
 										<img
 											alt={user.name ?? user.username}
-											src={getUserImgSrc(user.image?.id)}
+											src={getUserImgSrc(user.imageId)}
 											className="h-16 w-16 rounded-full"
 										/>
 										{user.name ? (
@@ -75,6 +105,8 @@ export default function UsersRoute() {
 					) : (
 						<p>No users found</p>
 					)
+				) : data.status === 'error' ? (
+					<ErrorList errors={['There was an error parsing the results']} />
 				) : null}
 			</main>
 		</div>
