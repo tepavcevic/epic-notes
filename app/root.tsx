@@ -21,8 +21,10 @@ import {
 	useMatches,
 	type MetaFunction,
 } from '@remix-run/react'
+import { useEffect } from 'react'
 import { AuthenticityTokenProvider } from 'remix-utils/csrf/react'
 import { HoneypotProvider } from 'remix-utils/honeypot/react'
+import { Toaster, toast as showToast } from 'sonner'
 import { z } from 'zod'
 import faviconAssetUrl from './assets/favicon.svg'
 import { GeneralErrorBoundary } from './components/error-boundary.tsx'
@@ -49,13 +51,13 @@ export const links: LinksFunction = () => {
 export async function loader({ request }: LoaderFunctionArgs) {
 	const [csrfToken, csrfCookieHeader] = await csrf.commitToken(request)
 	const honeyProps = honeypot.getInputProps()
-	console.log(getTheme(request))
 
 	return json(
 		{
 			username: os.userInfo().username,
 			ENV: getEnv(),
 			theme: getTheme(request),
+			toast: null,
 			csrfToken,
 			honeyProps,
 		},
@@ -76,7 +78,6 @@ export async function action({ request }: ActionFunctionArgs) {
 	)
 
 	const submission = parseWithZod(formData, { schema: ThemeFormSchema })
-	console.log(submission)
 
 	if (submission.status !== 'success') {
 		return json(submission.reply())
@@ -115,6 +116,7 @@ function Document({
 						__html: `window.ENV = ${JSON.stringify(env)}`,
 					}}
 				/>
+				<Toaster closeButton position="top-center" />
 				<ScrollRestoration />
 				<Scripts />
 				<LiveReload />
@@ -162,6 +164,7 @@ function App() {
 			</div>
 			<div className="h-5" />
 			<Spacer size="3xs" />
+			{data.toast ? <ShowToast toast={data.toast} /> : null}
 		</Document>
 	)
 }
@@ -245,6 +248,21 @@ export const meta: MetaFunction = () => {
 		{ title: 'Epic Notes' },
 		{ name: 'description', content: `Your own captain's log` },
 	]
+}
+
+function ShowToast({ toast }: { toast: any }) {
+	const { id, type, title, description } = toast as {
+		id: string
+		type: 'success' | 'message'
+		title: string
+		description: string
+	}
+	useEffect(() => {
+		setTimeout(() => {
+			showToast[type](title, { id, description })
+		}, 0)
+	}, [description, id, title, type])
+	return null
 }
 
 export function ErrorBoundary() {

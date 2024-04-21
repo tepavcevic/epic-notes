@@ -1,4 +1,5 @@
-import React, { useId } from 'react'
+import React, { useId, useRef } from 'react'
+import { Checkbox, type CheckboxProps } from '#app/components/ui/checkbox.tsx'
 import { Input } from '#app/components/ui/input.tsx'
 import { Label } from '#app/components/ui/label.tsx'
 import { Textarea } from '#app/components/ui/textarea.tsx'
@@ -17,7 +18,7 @@ export function ErrorList({
 	return (
 		<ul id={id} className="flex flex-col gap-1">
 			{errorsToRender.map(e => (
-				<li key={e} className="text-foreground-destructive text-[10px]">
+				<li key={e} className="text-[10px] text-foreground-destructive">
 					{e}
 				</li>
 			))}
@@ -79,6 +80,46 @@ export function TextareaField({
 				{...textareaProps}
 			/>
 			<div className="min-h-[32px] px-4 pb-3 pt-1">
+				{errorId ? <ErrorList id={errorId} errors={errors} /> : null}
+			</div>
+		</div>
+	)
+}
+
+export function CheckboxField({
+	labelProps,
+	buttonProps,
+	errors,
+	className,
+}: {
+	labelProps: JSX.IntrinsicElements['label']
+	buttonProps: CheckboxProps
+	errors?: ListOfErrors
+	className?: string
+}) {
+	const fallbackId = useId()
+	const buttonRef = useRef<HTMLButtonElement>(null)
+
+	const id = buttonProps.id ?? buttonProps.name ?? fallbackId
+	const errorId = errors?.length ? `${id}-error` : undefined
+	return (
+		<div className={className}>
+			<div className="flex gap-2">
+				<Checkbox
+					id={id}
+					ref={buttonRef}
+					aria-invalid={errorId ? true : undefined}
+					aria-describedby={errorId}
+					{...buttonProps}
+					type="button"
+				/>
+				<label
+					htmlFor={id}
+					{...labelProps}
+					className="self-center text-body-xs text-muted-foreground"
+				/>
+			</div>
+			<div className="px-4 pb-3 pt-1">
 				{errorId ? <ErrorList id={errorId} errors={errors} /> : null}
 			</div>
 		</div>

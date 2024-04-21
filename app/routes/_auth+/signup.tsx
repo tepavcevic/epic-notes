@@ -1,26 +1,97 @@
+import { getFormProps, getInputProps, useForm } from '@conform-to/react'
+import { getZodConstraint, parseWithZod } from '@conform-to/zod'
 import {
+	type ActionFunctionArgs,
 	redirect,
-	type DataFunctionArgs,
 	type MetaFunction,
+	json,
 } from '@remix-run/node'
-import { Form } from '@remix-run/react'
+import { Form, useActionData } from '@remix-run/react'
 import { AuthenticityTokenInput } from 'remix-utils/csrf/react'
 import { HoneypotInputs } from 'remix-utils/honeypot/react'
-import { Button } from '#app/components/ui/button.tsx'
-import { Input } from '#app/components/ui/input.tsx'
-import { Label } from '#app/components/ui/label.tsx'
+import { z } from 'zod'
+import { CheckboxField, ErrorList, Field } from '#app/components/forms.tsx'
+import { StatusButton } from '#app/components/ui/status-button.tsx'
 import { validateCSRF } from '#app/utils/csrf.server.ts'
+import { prisma } from '#app/utils/db.server.ts'
 import { checkHoneypot } from '#app/utils/honeypot.server.ts'
+import { useIsPending } from '#app/utils/misc.tsx'
+import {
+	EmailSchema,
+	NameSchema,
+	PasswordSchema,
+	UsernameSchema,
+} from '#app/utils/user-validation.ts'
 
-export async function action({ request }: DataFunctionArgs) {
+const SignupFormSchema = z
+	.object({
+		username: UsernameSchema,
+		name: NameSchema,
+		email: EmailSchema,
+		password: PasswordSchema,
+		confirmPassword: PasswordSchema,
+		agreeToTermsOfServiceAndPrivacyPolicy: z.boolean({
+			required_error:
+				'You must agree to the terms of service and privacy policy',
+		}),
+	})
+	.superRefine(({ confirmPassword, password }, ctx) => {
+		if (confirmPassword !== password) {
+			ctx.addIssue({
+				path: ['confirmPassword'],
+				code: 'custom',
+				message: 'The passwords must match',
+			})
+		}
+	})
+
+export async function action({ request }: ActionFunctionArgs) {
 	const formData = await request.formData()
 	await validateCSRF(formData, request.headers)
 	checkHoneypot(formData)
-	// TODO: implement signup
+
+	const submission = await parseWithZod(formData, {
+		schema: SignupFormSchema.superRefine(async (data, ctx) => {
+			const existingUser = await prisma.user.findUnique({
+				where: { username: data.username },
+				select: { id: true },
+			})
+			if (existingUser) {
+				ctx.addIssue({
+					path: ['username'],
+					code: z.ZodIssueCode.custom,
+					message: 'User already exists with this username',
+				})
+				return
+			}
+		}),
+		async: true,
+	})
+
+	if (submission.status !== 'success') {
+		return json(submission.reply())
+	}
+	if (!submission.value) {
+		return json({ status: 'error', submission } as const, { status: 400 })
+	}
+
 	return redirect('/')
 }
 
 export default function SignupRoute() {
+	const actionData = useActionData<typeof action>()
+	const isPending = useIsPending()
+
+	const [form, fields] = useForm({
+		id: 'signup-schema',
+		constraint: getZodConstraint(SignupFormSchema),
+		lastResult: actionData,
+		onValidate({ formData }) {
+			return parseWithZod(formData, { schema: SignupFormSchema })
+		},
+		shouldRevalidate: 'onBlur',
+	})
+
 	return (
 		<div className="container flex min-h-full flex-col justify-center pb-32 pt-20">
 			<div className="mx-auto w-full max-w-lg">
@@ -32,17 +103,85 @@ export default function SignupRoute() {
 				</div>
 				<Form
 					method="POST"
+					{...getFormProps(form)}
 					className="mx-auto flex min-w-[368px] max-w-sm flex-col gap-4"
 				>
 					<AuthenticityTokenInput />
 					<HoneypotInputs />
-					<div>
-						<Label htmlFor="email-input">Email</Label>
-						<Input autoFocus id="email-input" name="email" type="email" />
+					<Field
+						labelProps={{ htmlFor: fields.email.id, children: 'Email' }}
+						inputProps={{
+							...getInputProps(fields.email, { type: 'email' }),
+							autoComplete: 'email',
+							autoFocus: true,
+							className: 'lowercase',
+						}}
+						errors={fields.email.errors}
+					/>
+					<Field
+						labelProps={{ htmlFor: fields.username.id, children: 'Username' }}
+						inputProps={{
+							...getInputProps(fields.username, { type: 'text' }),
+							autoComplete: 'username',
+							className: 'lowercase',
+						}}
+						errors={fields.username.errors}
+					/>
+					<Field
+						labelProps={{ htmlFor: fields.name.id, children: 'Name' }}
+						inputProps={{
+							...getInputProps(fields.name, { type: 'text' }),
+							autoComplete: 'name',
+						}}
+						errors={fields.name.errors}
+					/>
+					<Field
+						labelProps={{ htmlFor: fields.password.id, children: 'Password' }}
+						inputProps={{
+							...getInputProps(fields.password, { type: 'password' }),
+							autoComplete: 'new-password',
+						}}
+						errors={fields.password.errors}
+					/>
+
+					<Field
+						labelProps={{
+							htmlFor: fields.confirmPassword.id,
+							children: 'Confirm Password',
+						}}
+						inputProps={{
+							...getInputProps(fields.confirmPassword, { type: 'password' }),
+							autoComplete: 'new-password',
+						}}
+						errors={fields.confirmPassword.errors}
+					/>
+
+					<CheckboxField
+						labelProps={{
+							htmlFor: fields.agreeToTermsOfServiceAndPrivacyPolicy.id,
+							children:
+								'Do you agree to our Terms of Service and Privacy Policy?',
+						}}
+						buttonProps={{
+							...getInputProps(fields.agreeToTermsOfServiceAndPrivacyPolicy, {
+								type: 'checkbox',
+							}),
+						}}
+						errors={fields.agreeToTermsOfServiceAndPrivacyPolicy.errors}
+					/>
+
+					<ErrorList errors={form.errors} id={form.errorId} />
+
+					<div className="flex items-center justify-between gap-6">
+						<StatusButton
+							className="w-full"
+							status={isPending ? 'pending' : actionData?.status ?? 'idle'}
+							type="submit"
+							disabled={isPending}
+						>
+							Create an account
+						</StatusButton>
 					</div>
-					<Button className="w-full" type="submit">
-						Create an account
-					</Button>
 				</Form>
 			</div>
 		</div>
