@@ -23,13 +23,13 @@ import { Icon } from '#app/components/ui/icon.tsx'
 import { StatusButton } from '#app/components/ui/status-button.tsx'
 import { validateCSRF } from '#app/utils/csrf.server.ts'
 import { prisma } from '#app/utils/db.server.ts'
+import { toastSessionStorage } from '#app/utils/toast.server.ts'
 import {
 	getNoteImgSrc,
 	invariantResponse,
 	useIsPending,
 } from '../../../utils/misc.tsx'
 import { type loader as noteLoader } from './notes.tsx'
-import { toastSessionStorage } from '#app/utils/toast.server.ts'
 
 const DeleteNoteSchema = z.object({
 	intent: z.literal('delete-note'),

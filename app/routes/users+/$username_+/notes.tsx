@@ -44,6 +44,18 @@ export default function NotesRoute() {
 							</h1>
 						</Link>
 						<ul className="overflow-y-auto overflow-x-hidden pb-12">
+							<li className="p-1 pr-0">
+								<NavLink
+									to="new-note"
+									preventScrollReset
+									prefetch="intent"
+									className={({ isActive }) =>
+										cn(navLinkDefaultClassName, isActive && 'bg-accent')
+									}
+								>
+									+ New Note
+								</NavLink>
+							</li>
 							{data.owner.notes.map(note => (
 								<li key={note.id} className="p-1 pr-0">
 									<NavLink
