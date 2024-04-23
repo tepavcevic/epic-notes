@@ -1,57 +1,86 @@
+import { getFormProps, useForm } from '@conform-to/react'
+import { getZodConstraint, parseWithZod } from '@conform-to/zod'
 import {
 	type LoaderFunctionArgs,
 	json,
 	redirect,
 	type ActionFunctionArgs,
 } from '@remix-run/node'
-import { Form, Link, type MetaFunction, useLoaderData } from '@remix-run/react'
+import {
+	Form,
+	Link,
+	type MetaFunction,
+	useLoaderData,
+	useActionData,
+} from '@remix-run/react'
+import { formatDistanceToNow } from 'date-fns/formatDistanceToNow'
 import { AuthenticityTokenInput } from 'remix-utils/csrf/react'
-import { CSRFError } from 'remix-utils/csrf/server'
+import { z } from 'zod'
 import { GeneralErrorBoundary } from '#app/components/error-boundary.tsx'
 import { floatingToolbarClassName } from '#app/components/floating-toolbar.tsx'
 import { Button } from '#app/components/ui/button.tsx'
-import { csrf } from '#app/utils/csrf.server.ts'
+import { Icon } from '#app/components/ui/icon.tsx'
+import { StatusButton } from '#app/components/ui/status-button.tsx'
+import { validateCSRF } from '#app/utils/csrf.server.ts'
 import { prisma } from '#app/utils/db.server.ts'
-import { invariantResponse } from '../../../utils/misc.tsx'
+import {
+	getNoteImgSrc,
+	invariantResponse,
+	useIsPending,
+} from '../../../utils/misc.tsx'
 import { type loader as noteLoader } from './notes.tsx'
+
+const DeleteNoteSchema = z.object({
+	intent: z.literal('delete-note'),
+	noteId: z.string(),
+})
 
 export async function loader({ params }: LoaderFunctionArgs) {
 	const note = await prisma.note.findUnique({
 		where: { id: params.noteId },
 		select: {
+			id: true,
 			title: true,
 			content: true,
+			ownerId: true,
+			updatedAt: true,
 			images: { select: { id: true, altText: true } },
 		},
 	})
 
 	invariantResponse(note, 'Note not found.', { status: 404 })
 
-	return json({ note })
+	const date = new Date(note.updatedAt)
+	const timeAgo = formatDistanceToNow(date)
+
+	return json({ note, timeAgo })
 }
 
 export async function action({ request, params }: ActionFunctionArgs) {
 	const formData = await request.formData()
-	try {
-		await csrf.validate(formData, request.headers)
-	} catch (error) {
-		if (error instanceof CSRFError) {
-			throw new Response('Invalid CSRF token', { status: 403 })
-		}
-		throw error
+	await validateCSRF(formData, request.headers)
+
+	const submission = await parseWithZod(formData, { schema: DeleteNoteSchema })
+
+	if (submission.status !== 'success') {
+		return json(submission.reply())
 	}
 
-	const intent = formData.get('intent')
-
-	switch (intent) {
-		case 'delete': {
-			await prisma.note.delete({ where: { id: params.noteId } })
-			return redirect(`/users/${params.username}/notes`)
-		}
-
-		default:
-			throw new Response(`Bad request - intent: ${intent}`, { status: 400 })
+	if (!submission.value) {
+		return json({ status: 'error', submission } as const, { status: 400 })
 	}
+
+	const { noteId } = submission.value
+
+	const note = await prisma.note.findFirst({
+		select: { id: true, owner: { select: { username: true } } },
+		where: { id: noteId, owner: { username: params.username } },
+	})
+	invariantResponse(note, 'Not found', { status: 404 })
+
+	await prisma.note.delete({ where: { id: noteId } })
+
+	return redirect(`/users/${note.owner.username}/notes`)
 }
 
 export default function NoteIdRoute() {
@@ -64,9 +93,9 @@ export default function NoteIdRoute() {
 				<ul className="flex flex-wrap gap-5 py-5">
 					{data.note.images.map(image => (
 						<li key={image.id}>
-							<a href={`/resources/images/${image.id}`}>
+							<a href={getNoteImgSrc(image.id)}>
 								<img
-									src={`/resources/images/${image.id}`}
+									src={getNoteImgSrc(image.id)}
 									alt={image.altText ?? ''}
 									className="h-32 w-32 rounded-lg object-cover"
 								/>
@@ -79,22 +108,57 @@ export default function NoteIdRoute() {
 				</p>
 			</div>
 			<div className={floatingToolbarClassName}>
-				<Form method="POST">
-					<AuthenticityTokenInput />
-					<Button
-						name="intent"
-						value="delete"
-						type="submit"
-						variant="destructive"
-					>
-						Delete
-					</Button>
-				</Form>
-				<Button asChild>
-					<Link to="edit">Edit</Link>
+				<span className="text-sm text-foreground/90 max-[524px]:hidden">
+					<Icon name="clock" className="scale-125">
+						{data.timeAgo} ago
+					</Icon>
+				</span>
+				<DeleteNote id={data.note.id} />
+				<Button
+					asChild
+					className="min-[525px]:max-md:aspect-square min-[525px]:max-md:px-0"
+				>
+					<Link to="edit">
+						<Icon name="pencil-1" className="scale-125 max-md:scale-150">
+							<span className="max-md:hidden">Edit</span>
+						</Icon>
+					</Link>
 				</Button>
 			</div>
 		</div>
+	)
+}
+
+function DeleteNote({ id }: { id: string }) {
+	const actionData = useActionData<any>()
+	const isPending = useIsPending()
+	const [form] = useForm({
+		id: 'delete-note',
+		lastResult: actionData,
+		constraint: getZodConstraint(DeleteNoteSchema),
+		onValidate({ formData }) {
+			return parseWithZod(formData, { schema: DeleteNoteSchema })
+		},
+	})
+
+	return (
+		<Form method="POST" {...getFormProps(form)}>
+			<AuthenticityTokenInput />
+			<input type="hidden" name="noteId" value={id} />
+			<StatusButton
+				type="submit"
+				name="intent"
+				value="delete-note"
+				variant="destructive"
+				status={isPending ? 'pending' : actionData?.status ?? 'idle'}
+				disabled={isPending}
+				className="w-full max-md:aspect-square max-md:px-0"
+			>
+				<Icon name="trash" className="scale-125 max-md:scale-150">
+					<span className="max-md:hidden">Delete</span>
+				</Icon>
+			</StatusButton>
+		</Form>
 	)
 }
 

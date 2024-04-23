@@ -15,8 +15,6 @@ export async function loader({ params }: LoaderFunctionArgs) {
 		},
 	})
 
-	console.log(owner)
-
 	invariantResponse(owner, 'Owner not found', { status: 404 })
 
 	return json({ owner })
