@@ -29,6 +29,7 @@ import {
 	useIsPending,
 } from '../../../utils/misc.tsx'
 import { type loader as noteLoader } from './notes.tsx'
+import { toastSessionStorage } from '#app/utils/toast.server.ts'
 
 const DeleteNoteSchema = z.object({
 	intent: z.literal('delete-note'),
@@ -60,7 +61,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 	const formData = await request.formData()
 	await validateCSRF(formData, request.headers)
 
-	const submission = await parseWithZod(formData, { schema: DeleteNoteSchema })
+	const submission = parseWithZod(formData, { schema: DeleteNoteSchema })
 
 	if (submission.status !== 'success') {
 		return json(submission.reply())
@@ -80,7 +81,19 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
 	await prisma.note.delete({ where: { id: noteId } })
 
-	return redirect(`/users/${note.owner.username}/notes`)
+	const cookie = request.headers.get('cookie')
+	const toastCookieSession = await toastSessionStorage.getSession(cookie)
+	toastCookieSession.set('toast', {
+		type: 'success',
+		title: 'Note deleted',
+		description: 'Your note has been deleted',
+	})
+
+	return redirect(`/users/${note.owner.username}/notes`, {
+		headers: {
+			'set-cookie': await toastSessionStorage.commitSession(toastCookieSession),
+		},
+	})
 }
 
 export default function NoteIdRoute() {
