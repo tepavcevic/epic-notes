@@ -58,7 +58,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
 	const cookieSession = await toastSessionStorage.getSession(cookie)
 
 	const toast = cookieSession.get('toast') ?? null
-	cookieSession.unset('toast')
 
 	const headers = new Headers()
 	headers.append(

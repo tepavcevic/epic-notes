@@ -83,7 +83,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
 	const cookie = request.headers.get('cookie')
 	const toastCookieSession = await toastSessionStorage.getSession(cookie)
-	toastCookieSession.set('toast', {
+	toastCookieSession.flash('toast', {
 		type: 'success',
 		title: 'Note deleted',
 		description: 'Your note has been deleted',
