@@ -1,35 +1,10 @@
 import fs from 'node:fs'
 import { faker } from '@faker-js/faker'
 import { PrismaClient } from '@prisma/client'
-import { UniqueEnforcer } from 'enforce-unique'
 import { promiseHash } from 'remix-utils/promise'
+import { createPassword, createUser } from '#tests/db-utils.ts'
 
 const prisma = new PrismaClient()
-
-const uniqueUsernameEnforcer = new UniqueEnforcer()
-
-export function createUser() {
-	const firstName = faker.person.firstName()
-	const lastName = faker.person.lastName()
-	const username = uniqueUsernameEnforcer.enforce(() => {
-		return (
-			faker.string.alphanumeric({ length: 2 }) +
-			'_' +
-			faker.internet.userName({
-				firstName: firstName.toLowerCase(),
-				lastName: lastName.toLowerCase(),
-			})
-		)
-			.slice(0, 20)
-			.toLowerCase()
-			.replaceAll(/[^a-z0-9_]/g, '_')
-	})
-	return {
-		username,
-		name: `${firstName} ${lastName}`,
-		email: `${username}@example.com`,
-	}
-}
 
 async function img({
 	altText,
@@ -106,11 +81,13 @@ async function seed() {
 	)
 
 	for (let index = 0; index < totalUsers; index++) {
+		const userData = createUser()
 		await prisma.user
 			.create({
 				data: {
-					...createUser(),
+					...userData,
 					image: { create: userImages[index % 10] },
+					password: { create: createPassword(userData.username) },
 					notes: {
 						create: Array.from({
 							length: faker.number.int({ min: 1, max: 3 }),
@@ -175,6 +152,9 @@ async function seed() {
 			username: 'kody',
 			name: 'Kody',
 			image: { create: kodyImages.kodyUser },
+			password: {
+				create: createPassword('password'),
+			},
 			notes: {
 				create: [
 					{

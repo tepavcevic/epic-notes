@@ -7,9 +7,11 @@ import {
 	json,
 } from '@remix-run/node'
 import { Form, useActionData } from '@remix-run/react'
+import bcrypt from 'bcryptjs'
 import { AuthenticityTokenInput } from 'remix-utils/csrf/react'
 import { HoneypotInputs } from 'remix-utils/honeypot/react'
 import { z } from 'zod'
+import { GeneralErrorBoundary } from '#app/components/error-boundary.tsx'
 import { CheckboxField, ErrorList, Field } from '#app/components/forms.tsx'
 import { StatusButton } from '#app/components/ui/status-button.tsx'
 import { validateCSRF } from '#app/utils/csrf.server.ts'
@@ -22,6 +24,7 @@ import {
 	PasswordSchema,
 	UsernameSchema,
 } from '#app/utils/user-validation.ts'
+import { sessionStorage } from '#app/utils/session.server.ts'
 
 const SignupFormSchema = z
 	.object({
@@ -64,6 +67,22 @@ export async function action({ request }: ActionFunctionArgs) {
 				})
 				return
 			}
+		}).transform(async data => {
+			const { username, email, password, name } = data
+
+			const user = await prisma.user.create({
+				select: { id: true },
+				data: {
+					email: email.toLowerCase(),
+					username: username.toLowerCase(),
+					name,
+					password: {
+						create: { hash: await bcrypt.hash(password, 10) },
+					},
+				},
+			})
+
+			return { ...data, user }
 		}),
 		async: true,
 	})
@@ -71,11 +90,20 @@ export async function action({ request }: ActionFunctionArgs) {
 	if (submission.status !== 'success') {
 		return json(submission.reply())
 	}
-	if (!submission.value) {
+	if (!submission.value?.user) {
 		return json({ status: 'error', submission } as const, { status: 400 })
 	}
 
-	return redirect('/')
+	const { user } = submission.value
+	const cookie = request.headers.get('cookie')
+	const cookieSession = await sessionStorage.getSession(cookie)
+	cookieSession.set('userId', user.id)
+
+	return redirect('/', {
+		headers: {
+			'set-cookie': await sessionStorage.commitSession(cookieSession),
+		},
+	})
 }
 
 export default function SignupRoute() {
@@ -190,4 +218,8 @@ export default function SignupRoute() {
 
 export const meta: MetaFunction = () => {
 	return [{ title: 'Setup Epic Notes Account' }]
+}
+
+export function ErrorBoundary() {
+	return <GeneralErrorBoundary />
 }
