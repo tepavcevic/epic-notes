@@ -10,3 +10,21 @@ export const toastSessionStorage = createCookieSessionStorage({
 		secrets: process.env.SESSION_SECRET.split(','),
 	},
 })
+
+export async function getToast(request: Request) {
+	const cookie = request.headers.get('cookie')
+
+	const cookieSession = await toastSessionStorage.getSession(cookie)
+
+	const toast = cookieSession.get('toast') ?? null
+	const toastHeaders = new Headers()
+	toastHeaders.append(
+		'set-cookie',
+		await toastSessionStorage.commitSession(cookieSession),
+	)
+	const headers = {
+		'set-cookie': await toastSessionStorage.commitSession(cookieSession),
+	}
+
+	return { toast, headers }
+}

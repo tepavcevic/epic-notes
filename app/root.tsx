@@ -31,15 +31,22 @@ import { GeneralErrorBoundary } from './components/error-boundary.tsx'
 import { ErrorList } from './components/forms.tsx'
 import { SearchBar } from './components/search-bar.tsx'
 import { Spacer } from './components/spacer.tsx'
+import { Button } from './components/ui/button.tsx'
 import { Icon } from './components/ui/icon.tsx'
 import fontStylestylesheetUrl from './styles/font.css'
 import tailwindStylesheetUrl from './styles/tailwind.css'
 import { csrf } from './utils/csrf.server.ts'
+import { prisma } from './utils/db.server.ts'
 import { getEnv } from './utils/env.server.ts'
 import { honeypot } from './utils/honeypot.server.ts'
-import { combineHeaders, invariantResponse } from './utils/misc.tsx'
+import {
+	combineHeaders,
+	getUserImgSrc,
+	invariantResponse,
+} from './utils/misc.tsx'
+import { getUserId } from './utils/session.server.ts'
 import { getTheme, setTheme, type Theme } from './utils/theme.server.ts'
-import { toastSessionStorage } from './utils/toast.server.ts'
+import { getToast } from './utils/toast.server.ts'
 
 export const links: LinksFunction = () => {
 	return [
@@ -52,27 +59,27 @@ export const links: LinksFunction = () => {
 export async function loader({ request }: LoaderFunctionArgs) {
 	const [csrfToken, csrfCookieHeader] = await csrf.commitToken(request)
 	const honeyProps = honeypot.getInputProps()
+	const { toast, headers: toastHeaders } = await getToast(request)
+	const { userId } = await getUserId(request)
 
-	const cookie = request.headers.get('cookie')
-
-	const cookieSession = await toastSessionStorage.getSession(cookie)
-
-	const toast = cookieSession.get('toast') ?? null
-
-	const headers = new Headers()
-	headers.append(
-		'set-cookie',
-		await toastSessionStorage.commitSession(cookieSession),
-	)
-	if (csrfCookieHeader) {
-		headers.append('set-cookie', csrfCookieHeader)
-	}
+	const user = userId
+		? await prisma.user.findUnique({
+				select: {
+					id: true,
+					username: true,
+					name: true,
+					image: { select: { id: true } },
+				},
+				where: { id: userId },
+			})
+		: null
 
 	return json(
 		{
 			username: os.userInfo().username,
 			ENV: getEnv(),
 			theme: getTheme(request),
+			user,
 			toast,
 			csrfToken,
 			honeyProps,
@@ -80,9 +87,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 		{
 			headers: combineHeaders(
 				csrfCookieHeader ? { 'set-cookie': csrfCookieHeader } : null,
-				{
-					'set-cookie': await toastSessionStorage.commitSession(cookieSession),
-				},
+				toastHeaders,
 			),
 		},
 	)
@@ -151,11 +156,12 @@ function App() {
 	const theme = useTheme()
 	const matches = useMatches()
 	const isOnSearchPage = matches.find(m => m.id === 'routes/users+/index')
+	const user = data.user
 
 	return (
 		<Document theme={theme} env={data.ENV}>
-			<header className="container mx-auto py-6">
-				<nav className="flex items-center justify-between gap-6">
+			<header className="container px-6 py-4 sm:px-8 sm:py-6">
+				<nav className="flex items-center justify-between gap-4 sm:gap-6">
 					<Link to="/">
 						<div className="font-light">epic</div>
 						<div className="font-bold">notes</div>
@@ -165,9 +171,31 @@ function App() {
 							<SearchBar status="idle" />
 						</div>
 					)}
-					<Link className="underline" to="/users/kody/notes">
-						Kody's Notes
-					</Link>
+					<div className="flex items-center gap-10">
+						{user ? (
+							<div className="flex items-center gap-2">
+								<Button asChild variant="secondary">
+									<Link
+										to={`users/${user.username}`}
+										className="flex items-center gap-2"
+									>
+										<img
+											className="h-8 w-8 rounded-full object-cover"
+											src={getUserImgSrc(user.image?.id)}
+											alt={`${user.name ?? user.username} avatar`}
+										/>
+										<span className="text-body-sm font-bold">
+											{user.name ?? user.username}
+										</span>
+									</Link>
+								</Button>
+							</div>
+						) : (
+							<Button asChild variant="default" size="sm">
+								<Link to="/login">Log In</Link>
+							</Button>
+						)}
+					</div>
 				</nav>
 			</header>
 
@@ -175,15 +203,16 @@ function App() {
 				<Outlet />
 			</div>
 
-			<div className="container mx-auto flex justify-between">
+			<div className="container flex justify-between">
 				<Link to="/">
 					<div className="font-light">epic</div>
 					<div className="font-bold">notes</div>
 				</Link>
-				<p>Built with ♥️ by {data.username}</p>
-				<ThemeSwitch userPreference={theme} />
+				<div className="flex items-center gap-2">
+					<p>Built with ♥️ by {data.username}</p>
+					<ThemeSwitch userPreference={theme} />
+				</div>
 			</div>
-			<div className="h-5" />
 			<Spacer size="3xs" />
 			{data.toast ? <ShowToast toast={data.toast} /> : null}
 		</Document>

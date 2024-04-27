@@ -9,8 +9,10 @@ import { Field, ErrorList } from '#app/components/forms.tsx'
 import { Spacer } from '#app/components/spacer.tsx'
 import { StatusButton } from '#app/components/ui/status-button.tsx'
 import { validateCSRF } from '#app/utils/csrf.server.ts'
+import { prisma } from '#app/utils/db.server.ts'
 import { checkHoneypot } from '#app/utils/honeypot.server.ts'
 import { useIsPending } from '#app/utils/misc.tsx'
+import { sessionStorage } from '#app/utils/session.server.ts'
 import { PasswordSchema, UsernameSchema } from '#app/utils/user-validation.ts'
 
 const LoginFormSchema = z.object({
@@ -24,7 +26,24 @@ export async function action({ request }: ActionFunctionArgs) {
 	await validateCSRF(formData, request.headers)
 	checkHoneypot(formData)
 	const submission = await parseWithZod(formData, {
-		schema: LoginFormSchema,
+		schema: LoginFormSchema.transform(async (data, ctx) => {
+			const user = await prisma.user.findUnique({
+				select: { id: true },
+				where: {
+					username: data.username,
+				},
+			})
+
+			if (!user) {
+				ctx.addIssue({
+					code: 'custom',
+					message: 'Invalid username or password',
+				})
+				return z.NEVER
+			}
+
+			return { ...data, user }
+		}),
 		async: true,
 	})
 
@@ -33,11 +52,22 @@ export async function action({ request }: ActionFunctionArgs) {
 	if (submission.status !== 'success') {
 		return json(submission.reply())
 	}
-	if (!submission.value) {
+
+	if (!submission.value?.user) {
 		return json({ status: 'error', submission } as const, { status: 400 })
 	}
 
-	return redirect('/')
+	const { user } = submission.value
+
+	const cookie = request.headers.get('cookie')
+	const cookieSession = await sessionStorage.getSession(cookie)
+	cookieSession.set('userId', user.id)
+
+	return redirect('/', {
+		headers: {
+			'set-cookie': await sessionStorage.commitSession(cookieSession),
+		},
+	})
 }
 
 export default function LoginPage() {
