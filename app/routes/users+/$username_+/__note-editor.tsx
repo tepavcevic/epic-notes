@@ -83,8 +83,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
 				imageUpdates: await Promise.all(
 					images.filter(imageHasId).map(async i => {
 						if (imageHasFile(i)) {
-							console.log(i)
-
 							return {
 								id: i.id,
 								altText: i.altText,
@@ -120,8 +118,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
 	if (!submission.value) {
 		return json({ status: 'error', submission } as const, { status: 400 })
 	}
-
-	console.log(submission.value)
 
 	const {
 		id: noteId,
