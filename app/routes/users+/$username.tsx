@@ -1,15 +1,18 @@
 import { json, type LoaderFunctionArgs } from '@remix-run/node'
-import { Link, useLoaderData, type MetaFunction } from '@remix-run/react'
+import { Form, Link, useLoaderData, type MetaFunction } from '@remix-run/react'
 import { GeneralErrorBoundary } from '#app/components/error-boundary.tsx'
 import { Spacer } from '#app/components/spacer.tsx'
 import { Button } from '#app/components/ui/button.tsx'
+import { Icon } from '#app/components/ui/icon.tsx'
 import { prisma } from '#app/utils/db.server.ts'
 import { getUserImgSrc, invariantResponse } from '#app/utils/misc.tsx'
+import { useOptionalUser } from '#app/utils/user.ts'
 
 export async function loader({ params }: LoaderFunctionArgs) {
 	const user = await prisma.user.findUnique({
 		where: { username: params.username },
 		select: {
+			id: true,
 			name: true,
 			username: true,
 			createdAt: true,
@@ -27,8 +30,10 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
 export default function ProfileRoute() {
 	const data = useLoaderData<typeof loader>()
+	const loggedInUser = useOptionalUser()
 	const user = data.user
 	const userDisplayName = user.name ?? user.username
+	const isLoggedIn = loggedInUser?.id === user.id
 
 	return (
 		<div className="container mb-48 mt-36 flex flex-col items-center justify-center">
@@ -56,6 +61,15 @@ export default function ProfileRoute() {
 					<p className="mt-2 text-center text-muted-foreground">
 						Joined {data.userJoinedDisplay}
 					</p>
+					{isLoggedIn ? (
+						<Form className="mt-3">
+							<Button type="submit" variant="link" size="pill">
+								<Icon name="exit" className="scale-125 max-md:scale-150">
+									Logout
+								</Icon>
+							</Button>
+						</Form>
+					) : null}
 					<div className="mt-10 flex gap-4">
 						<Button asChild>
 							<Link to="notes" prefetch="intent">

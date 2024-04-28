@@ -24,6 +24,7 @@ import { StatusButton } from '#app/components/ui/status-button.tsx'
 import { validateCSRF } from '#app/utils/csrf.server.ts'
 import { prisma } from '#app/utils/db.server.ts'
 import { toastSessionStorage } from '#app/utils/toast.server.ts'
+import { useOptionalUser } from '#app/utils/user.ts'
 import {
 	getNoteImgSrc,
 	invariantResponse,
@@ -98,6 +99,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
 export default function NoteIdRoute() {
 	const data = useLoaderData<typeof loader>()
+	const user = useOptionalUser()
+	const isOwner = user?.id === data.note.ownerId
 
 	return (
 		<div className="absolute inset-0 flex flex-col px-10">
@@ -120,24 +123,26 @@ export default function NoteIdRoute() {
 					{data.note.content}
 				</p>
 			</div>
-			<div className={floatingToolbarClassName}>
-				<span className="text-sm text-foreground/90 max-[524px]:hidden">
-					<Icon name="clock" className="scale-125">
-						{data.timeAgo} ago
-					</Icon>
-				</span>
-				<DeleteNote id={data.note.id} />
-				<Button
-					asChild
-					className="min-[525px]:max-md:aspect-square min-[525px]:max-md:px-0"
-				>
-					<Link to="edit">
-						<Icon name="pencil-1" className="scale-125 max-md:scale-150">
-							<span className="max-md:hidden">Edit</span>
+			{isOwner && (
+				<div className={floatingToolbarClassName}>
+					<span className="text-sm text-foreground/90 max-[524px]:hidden">
+						<Icon name="clock" className="scale-125">
+							{data.timeAgo} ago
 						</Icon>
-					</Link>
-				</Button>
-			</div>
+					</span>
+					<DeleteNote id={data.note.id} />
+					<Button
+						asChild
+						className="min-[525px]:max-md:aspect-square min-[525px]:max-md:px-0"
+					>
+						<Link to="edit">
+							<Icon name="pencil-1" className="scale-125 max-md:scale-150">
+								<span className="max-md:hidden">Edit</span>
+							</Icon>
+						</Link>
+					</Button>
+				</div>
+			)}
 		</div>
 	)
 }

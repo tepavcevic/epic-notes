@@ -47,6 +47,7 @@ import {
 import { getUserId } from './utils/session.server.ts'
 import { getTheme, setTheme, type Theme } from './utils/theme.server.ts'
 import { getToast } from './utils/toast.server.ts'
+import { useOptionalUser } from './utils/user.ts'
 
 export const links: LinksFunction = () => {
 	return [
@@ -156,7 +157,7 @@ function App() {
 	const theme = useTheme()
 	const matches = useMatches()
 	const isOnSearchPage = matches.find(m => m.id === 'routes/users+/index')
-	const user = data.user
+	const user = useOptionalUser()
 
 	return (
 		<Document theme={theme} env={data.ENV}>
