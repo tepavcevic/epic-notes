@@ -1,11 +1,11 @@
 import os from 'node:os'
-import { getFormProps, useForm } from '@conform-to/react'
 import { parseWithZod } from '@conform-to/zod'
 import {
 	json,
 	type LoaderFunctionArgs,
 	type LinksFunction,
 	type ActionFunctionArgs,
+	redirect,
 } from '@remix-run/node'
 import {
 	Link,
@@ -15,24 +15,23 @@ import {
 	Outlet,
 	Scripts,
 	ScrollRestoration,
-	useFetcher,
-	useFetchers,
 	useLoaderData,
 	useMatches,
 	type MetaFunction,
 } from '@remix-run/react'
-import { useEffect } from 'react'
 import { AuthenticityTokenProvider } from 'remix-utils/csrf/react'
 import { HoneypotProvider } from 'remix-utils/honeypot/react'
-import { Toaster, toast as showToast } from 'sonner'
+import { Toaster } from 'sonner'
 import { z } from 'zod'
 import faviconAssetUrl from './assets/favicon.svg'
 import { GeneralErrorBoundary } from './components/error-boundary.tsx'
-import { ErrorList } from './components/forms.tsx'
+import LogoutTimer from './components/logout-timer.tsx'
 import { SearchBar } from './components/search-bar.tsx'
+import ShowToast from './components/show-toast.tsx'
 import { Spacer } from './components/spacer.tsx'
+import ThemeSwitch from './components/theme-switch.tsx'
 import { Button } from './components/ui/button.tsx'
-import { Icon } from './components/ui/icon.tsx'
+import useTheme from './hooks/useTheme.tsx'
 import fontStylestylesheetUrl from './styles/font.css'
 import tailwindStylesheetUrl from './styles/tailwind.css'
 import { csrf } from './utils/csrf.server.ts'
@@ -44,7 +43,7 @@ import {
 	getUserImgSrc,
 	invariantResponse,
 } from './utils/misc.tsx'
-import { getUserId } from './utils/session.server.ts'
+import { getUserId, sessionStorage } from './utils/session.server.ts'
 import { getTheme, setTheme, type Theme } from './utils/theme.server.ts'
 import { getToast } from './utils/toast.server.ts'
 import { useOptionalUser } from './utils/user.ts'
@@ -57,11 +56,21 @@ export const links: LinksFunction = () => {
 	]
 }
 
+export const meta: MetaFunction = () => {
+	return [
+		{ title: 'Epic Notes' },
+		{ name: 'description', content: `Your own captain's log` },
+	]
+}
+
 export async function loader({ request }: LoaderFunctionArgs) {
 	const [csrfToken, csrfCookieHeader] = await csrf.commitToken(request)
 	const honeyProps = honeypot.getInputProps()
 	const { toast, headers: toastHeaders } = await getToast(request)
 	const { userId } = await getUserId(request)
+	const cookieSession = await sessionStorage.getSession(
+		request.headers.get('cookie'),
+	)
 
 	const user = userId
 		? await prisma.user.findUnique({
@@ -74,6 +83,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
 				where: { id: userId },
 			})
 		: null
+
+	if (userId && !user) {
+		return redirect('/', {
+			headers: {
+				'set-cookie': await sessionStorage.destroySession(cookieSession),
+			},
+		})
+	}
 
 	return json(
 		{
@@ -94,7 +111,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 	)
 }
 
-const ThemeFormSchema = z.object({ theme: z.enum(['light', 'dark']) })
+export const ThemeFormSchema = z.object({ theme: z.enum(['light', 'dark']) })
 
 export async function action({ request }: ActionFunctionArgs) {
 	const formData = await request.formData()
@@ -121,10 +138,12 @@ export async function action({ request }: ActionFunctionArgs) {
 
 function Document({
 	children,
+	isLoggedIn = false,
 	theme,
 	env,
 }: {
 	children: React.ReactNode
+	isLoggedIn?: boolean
 	theme?: Theme
 	env?: Record<string, string>
 }) {
@@ -143,6 +162,7 @@ function Document({
 						__html: `window.ENV = ${JSON.stringify(env)}`,
 					}}
 				/>
+				{isLoggedIn && <LogoutTimer />}
 				<Toaster closeButton position="top-center" />
 				<ScrollRestoration />
 				<Scripts />
@@ -160,7 +180,7 @@ function App() {
 	const user = useOptionalUser()
 
 	return (
-		<Document theme={theme} env={data.ENV}>
+		<Document theme={theme} env={data.ENV} isLoggedIn={!!user?.id}>
 			<header className="container px-6 py-4 sm:px-8 sm:py-6">
 				<nav className="flex items-center justify-between gap-4 sm:gap-6">
 					<Link to="/">
@@ -220,7 +240,7 @@ function App() {
 	)
 }
 
-function AppWithProviders() {
+export default function AppWithProviders() {
 	const data = useLoaderData<typeof loader>()
 	return (
 		<HoneypotProvider {...data.honeyProps}>
@@ -229,91 +249,6 @@ function AppWithProviders() {
 			</AuthenticityTokenProvider>
 		</HoneypotProvider>
 	)
-}
-
-function useTheme() {
-	const data = useLoaderData<typeof loader>()
-	const fetchers = useFetchers()
-	const fetcher = fetchers.find(
-		f => f.formData?.get('intent') === 'update-theme',
-	)
-	const optimisticTheme = fetcher?.formData?.get('theme')
-
-	if (optimisticTheme === 'light' || optimisticTheme === 'dark') {
-		return optimisticTheme
-	}
-
-	return data.theme
-}
-
-function ThemeSwitch({ userPreference }: { userPreference?: Theme }) {
-	// if <typeof action> is used here, TS will scream that submission does not exist on fetcher.data
-	const fetcher = useFetcher<any>()
-
-	const [form] = useForm({
-		id: 'theme-switch',
-		lastResult: fetcher.data?.submission,
-		onValidate({ formData }) {
-			return parseWithZod(formData, { schema: ThemeFormSchema })
-		},
-	})
-
-	const mode = userPreference ?? 'light'
-	const nextMode = mode === 'light' ? 'dark' : 'light'
-
-	const modeLabel = {
-		light: (
-			<Icon name="sun">
-				<span className="sr-only">Light</span>
-			</Icon>
-		),
-		dark: (
-			<Icon name="moon">
-				<span className="sr-only">Dark</span>
-			</Icon>
-		),
-	}
-
-	return (
-		<fetcher.Form method="POST" {...getFormProps(form)}>
-			<input type="hidden" name="theme" value={nextMode} />
-			<div className="flex gap-2">
-				<button
-					name="intent"
-					value="update-theme"
-					type="submit"
-					className="flex h-8 w-8 cursor-pointer items-center justify-center"
-				>
-					{modeLabel[mode]}
-				</button>
-			</div>
-			<ErrorList errors={form.errors} id={form.errorId} />
-		</fetcher.Form>
-	)
-}
-
-export default AppWithProviders
-
-export const meta: MetaFunction = () => {
-	return [
-		{ title: 'Epic Notes' },
-		{ name: 'description', content: `Your own captain's log` },
-	]
-}
-
-function ShowToast({ toast }: { toast: any }) {
-	const { id, type, title, description } = toast as {
-		id: string
-		type: 'success' | 'message'
-		title: string
-		description: string
-	}
-	useEffect(() => {
-		setTimeout(() => {
-			showToast[type](title, { id, description })
-		}, 0)
-	}, [description, id, title, type])
-	return null
 }
 
 export function ErrorBoundary() {
