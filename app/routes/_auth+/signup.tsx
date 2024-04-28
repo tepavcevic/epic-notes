@@ -14,6 +14,7 @@ import { z } from 'zod'
 import { GeneralErrorBoundary } from '#app/components/error-boundary.tsx'
 import { CheckboxField, ErrorList, Field } from '#app/components/forms.tsx'
 import { StatusButton } from '#app/components/ui/status-button.tsx'
+import { getSessionExpirationDate } from '#app/utils/auth.server.ts'
 import { validateCSRF } from '#app/utils/csrf.server.ts'
 import { prisma } from '#app/utils/db.server.ts'
 import { checkHoneypot } from '#app/utils/honeypot.server.ts'
@@ -37,6 +38,7 @@ const SignupFormSchema = z
 			required_error:
 				'You must agree to the terms of service and privacy policy',
 		}),
+		remember: z.boolean().optional(),
 	})
 	.superRefine(({ confirmPassword, password }, ctx) => {
 		if (confirmPassword !== password) {
@@ -94,14 +96,16 @@ export async function action({ request }: ActionFunctionArgs) {
 		return json({ status: 'error', submission } as const, { status: 400 })
 	}
 
-	const { user } = submission.value
+	const { user, remember } = submission.value
 	const cookie = request.headers.get('cookie')
 	const cookieSession = await sessionStorage.getSession(cookie)
 	cookieSession.set('userId', user.id)
 
 	return redirect('/', {
 		headers: {
-			'set-cookie': await sessionStorage.commitSession(cookieSession),
+			'set-cookie': await sessionStorage.commitSession(cookieSession, {
+				expires: remember ? getSessionExpirationDate() : undefined,
+			}),
 		},
 	})
 }
@@ -132,7 +136,7 @@ export default function SignupRoute() {
 				<Form
 					method="POST"
 					{...getFormProps(form)}
-					className="mx-auto flex min-w-[368px] max-w-sm flex-col gap-4"
+					className="mx-auto min-w-[368px] max-w-sm"
 				>
 					<AuthenticityTokenInput />
 					<HoneypotInputs />
@@ -196,6 +200,17 @@ export default function SignupRoute() {
 							}),
 						}}
 						errors={fields.agreeToTermsOfServiceAndPrivacyPolicy.errors}
+					/>
+
+					<CheckboxField
+						labelProps={{
+							htmlFor: fields.remember.id,
+							children: 'Remember me',
+						}}
+						buttonProps={getInputProps(fields.remember, {
+							type: 'checkbox',
+						})}
+						errors={fields.remember.errors}
 					/>
 
 					<ErrorList errors={form.errors} id={form.errorId} />
