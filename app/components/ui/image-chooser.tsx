@@ -5,7 +5,7 @@ import {
 } from '@conform-to/react'
 import { useState } from 'react'
 import { type z } from 'zod'
-import { type ImageFieldsetSchema } from '#app/routes/users+/$username_+/notes.$noteId_.edit.tsx'
+import { type ImageFieldsetSchema } from '#app/routes/users+/$username_+/__note-editor.tsx'
 import { cn } from '#app/utils/misc.tsx'
 import { Label } from './label.tsx'
 import { Textarea } from './textarea.tsx'
@@ -19,17 +19,21 @@ export function ImageChooser({
 	const existingImage = Boolean(fields.id.initialValue)
 
 	const [previewImage, setPreviewImage] = useState<string | null>(
-		existingImage ? `/resources/images/${fields.id.value}` : null,
+		existingImage ? `/resources/images/${fields.id.initialValue}` : null,
 	)
 	const [altText, setAltText] = useState(fields.altText.initialValue ?? '')
 
 	return (
-		<fieldset {...getFieldsetProps(config)}>
+		<fieldset
+			{...getFieldsetProps(config)}
+			aria-invalid={Boolean(config.errors?.length) || undefined}
+			aria-describedby={config.errors?.length ? config.errorId : undefined}
+		>
 			<div className="flex gap-3">
 				<div className="w-32">
 					<div className="relative h-32 w-32">
 						<label
-							htmlFor={fields.file.id}
+							htmlFor={fields.file.key}
 							className={cn('group absolute h-32 w-32 rounded-lg', {
 								'bg-accent opacity-40 focus-within:opacity-100 hover:opacity-100':
 									!previewImage,
@@ -56,13 +60,12 @@ export function ImageChooser({
 							)}
 							{existingImage ? (
 								<input
-									{...getInputProps(fields.file, {
+									{...getInputProps(fields.id, {
 										type: 'hidden',
 									})}
 								/>
 							) : null}
 							<input
-								{...getInputProps(fields.file, { type: 'file' })}
 								aria-label="Image"
 								className="absolute left-0 top-0 z-0 h-32 w-32 cursor-pointer opacity-0"
 								onChange={event => {
@@ -79,6 +82,9 @@ export function ImageChooser({
 									}
 								}}
 								accept="image/*"
+								{...getInputProps(fields.file, {
+									type: 'file',
+								})}
 							/>
 						</label>
 					</div>

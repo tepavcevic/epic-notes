@@ -2,6 +2,7 @@ import { getFormProps, getInputProps, useForm } from '@conform-to/react'
 import { getZodConstraint, parseWithZod } from '@conform-to/zod'
 import { type ActionFunctionArgs, json, redirect } from '@remix-run/node'
 import { Form, Link, useActionData } from '@remix-run/react'
+import bcrypt from 'bcryptjs'
 import { AuthenticityTokenInput } from 'remix-utils/csrf/react'
 import { HoneypotInputs } from 'remix-utils/honeypot/react'
 import { z } from 'zod'
@@ -27,14 +28,14 @@ export async function action({ request }: ActionFunctionArgs) {
 	checkHoneypot(formData)
 	const submission = await parseWithZod(formData, {
 		schema: LoginFormSchema.transform(async (data, ctx) => {
-			const user = await prisma.user.findUnique({
-				select: { id: true },
+			const userWithHash = await prisma.user.findUnique({
+				select: { id: true, password: { select: { hash: true } } },
 				where: {
 					username: data.username,
 				},
 			})
 
-			if (!user) {
+			if (!userWithHash || !userWithHash.password?.hash) {
 				ctx.addIssue({
 					code: 'custom',
 					message: 'Invalid username or password',
@@ -42,7 +43,20 @@ export async function action({ request }: ActionFunctionArgs) {
 				return z.NEVER
 			}
 
-			return { ...data, user }
+			const match = await bcrypt.compare(
+				data.password,
+				userWithHash.password?.hash,
+			)
+
+			if (!match) {
+				ctx.addIssue({
+					code: 'custom',
+					message: 'Invalid username or password',
+				})
+				return z.NEVER
+			}
+
+			return { ...data, user: { id: userWithHash.id } }
 		}),
 		async: true,
 	})
