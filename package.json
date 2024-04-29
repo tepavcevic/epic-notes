@@ -41,7 +41,7 @@
     "morgan": "^1.10.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "remix-utils": "^7.1.0",
+    "remix-utils": "^7.6.0",
     "sonner": "^1.4.41",
     "spin-delay": "^2.0.0",
     "tailwind-merge": "^2.2.1",

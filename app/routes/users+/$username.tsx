@@ -63,7 +63,7 @@ export default function ProfileRoute() {
 						Joined {data.userJoinedDisplay}
 					</p>
 					{isLoggedIn ? (
-						<Form className="mt-3" method="POST" action="/logout">
+						<Form action="/logout" method="POST" className="mt-3">
 							<AuthenticityTokenInput />
 							<Button type="submit" variant="link" size="pill">
 								<Icon name="exit" className="scale-125 max-md:scale-150">
@@ -73,11 +73,26 @@ export default function ProfileRoute() {
 						</Form>
 					) : null}
 					<div className="mt-10 flex gap-4">
-						<Button asChild>
-							<Link to="notes" prefetch="intent">
-								{userDisplayName}'s notes
-							</Link>
-						</Button>
+						{isLoggedIn ? (
+							<>
+								<Button asChild>
+									<Link to="notes" prefetch="intent">
+										My notes
+									</Link>
+								</Button>
+								<Button asChild>
+									<Link to="/settings/profile" prefetch="intent">
+										Edit profile
+									</Link>
+								</Button>
+							</>
+						) : (
+							<Button asChild>
+								<Link to="notes" prefetch="intent">
+									{userDisplayName}'s notes
+								</Link>
+							</Button>
+						)}
 					</div>
 				</div>
 			</div>

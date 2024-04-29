@@ -1,17 +1,24 @@
 import { getFormProps, getInputProps, useForm } from '@conform-to/react'
 import { getZodConstraint, parseWithZod } from '@conform-to/zod'
-import { type ActionFunctionArgs, json, redirect } from '@remix-run/node'
+import {
+	type ActionFunctionArgs,
+	json,
+	redirect,
+	type LoaderFunctionArgs,
+} from '@remix-run/node'
 import { Form, Link, useActionData } from '@remix-run/react'
-import bcrypt from 'bcryptjs'
 import { AuthenticityTokenInput } from 'remix-utils/csrf/react'
 import { HoneypotInputs } from 'remix-utils/honeypot/react'
 import { z } from 'zod'
 import { Field, ErrorList, CheckboxField } from '#app/components/forms.tsx'
 import { Spacer } from '#app/components/spacer.tsx'
 import { StatusButton } from '#app/components/ui/status-button.tsx'
-import { getSessionExpirationDate } from '#app/utils/auth.server.ts'
+import {
+	getSessionExpirationDate,
+	login,
+	requireAnonymous,
+} from '#app/utils/auth.server.ts'
 import { validateCSRF } from '#app/utils/csrf.server.ts'
-import { prisma } from '#app/utils/db.server.ts'
 import { checkHoneypot } from '#app/utils/honeypot.server.ts'
 import { useIsPending } from '#app/utils/misc.tsx'
 import { sessionStorage } from '#app/utils/session.server.ts'
@@ -23,6 +30,12 @@ const LoginFormSchema = z.object({
 	remember: z.boolean().optional(),
 })
 
+export async function loader({ request }: LoaderFunctionArgs) {
+	await requireAnonymous(request)
+
+	return json({})
+}
+
 export async function action({ request }: ActionFunctionArgs) {
 	const formData = await request.formData()
 
@@ -30,14 +43,9 @@ export async function action({ request }: ActionFunctionArgs) {
 	checkHoneypot(formData)
 	const submission = await parseWithZod(formData, {
 		schema: LoginFormSchema.transform(async (data, ctx) => {
-			const userWithHash = await prisma.user.findUnique({
-				select: { id: true, password: { select: { hash: true } } },
-				where: {
-					username: data.username,
-				},
-			})
+			const user = await login(data)
 
-			if (!userWithHash || !userWithHash.password?.hash) {
+			if (!user) {
 				ctx.addIssue({
 					code: 'custom',
 					message: 'Invalid username or password',
@@ -45,20 +53,7 @@ export async function action({ request }: ActionFunctionArgs) {
 				return z.NEVER
 			}
 
-			const match = await bcrypt.compare(
-				data.password,
-				userWithHash.password?.hash,
-			)
-
-			if (!match) {
-				ctx.addIssue({
-					code: 'custom',
-					message: 'Invalid username or password',
-				})
-				return z.NEVER
-			}
-
-			return { ...data, user: { id: userWithHash.id } }
+			return { ...data, user: { id: user.id } }
 		}),
 		async: true,
 	})

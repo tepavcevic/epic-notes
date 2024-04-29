@@ -19,7 +19,7 @@ export function ImageChooser({
 	const existingImage = Boolean(fields.id.initialValue)
 
 	const [previewImage, setPreviewImage] = useState<string | null>(
-		existingImage ? `/resources/images/${fields.id.initialValue}` : null,
+		existingImage ? `/resources/note-images/${fields.id.initialValue}` : null,
 	)
 	const [altText, setAltText] = useState(fields.altText.initialValue ?? '')
 

@@ -185,6 +185,8 @@ export function NoteEditor({
 
 	const imageList = fields.images.getFieldList()
 
+	imageList.map(image => console.log(image.value))
+
 	return (
 		<div className="absolute inset-0">
 			<Form
@@ -221,7 +223,7 @@ export function NoteEditor({
 									className="relative border-b-2 border-muted-foreground pb-4"
 									key={image.key}
 								>
-									{/* <button
+									<button
 										className="text-foreground-destructive absolute right-0 top-0"
 										{...form.remove.getButtonProps({
 											name: fields.images.name,
@@ -232,7 +234,7 @@ export function NoteEditor({
 											<Icon name="cross-1" />
 										</span>{' '}
 										<span className="sr-only">Remove image {index + 1}</span>
-									</button> */}
+									</button>
 									<ImageChooser config={image} />
 								</li>
 							))}

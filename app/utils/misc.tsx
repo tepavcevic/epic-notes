@@ -10,7 +10,7 @@ export function getUserImgSrc(imageId?: string | null) {
 }
 
 export function getNoteImgSrc(imageId: string) {
-	return `/resources/images/${imageId}`
+	return `/resources/note-images/${imageId}`
 }
 
 export function getErrorMessage(error: unknown) {

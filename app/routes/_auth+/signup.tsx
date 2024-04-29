@@ -5,16 +5,20 @@ import {
 	redirect,
 	type MetaFunction,
 	json,
+	type LoaderFunctionArgs,
 } from '@remix-run/node'
 import { Form, useActionData } from '@remix-run/react'
-import bcrypt from 'bcryptjs'
 import { AuthenticityTokenInput } from 'remix-utils/csrf/react'
 import { HoneypotInputs } from 'remix-utils/honeypot/react'
 import { z } from 'zod'
 import { GeneralErrorBoundary } from '#app/components/error-boundary.tsx'
 import { CheckboxField, ErrorList, Field } from '#app/components/forms.tsx'
 import { StatusButton } from '#app/components/ui/status-button.tsx'
-import { getSessionExpirationDate } from '#app/utils/auth.server.ts'
+import {
+	getSessionExpirationDate,
+	requireAnonymous,
+	signup,
+} from '#app/utils/auth.server.ts'
 import { validateCSRF } from '#app/utils/csrf.server.ts'
 import { prisma } from '#app/utils/db.server.ts'
 import { checkHoneypot } from '#app/utils/honeypot.server.ts'
@@ -50,6 +54,12 @@ const SignupFormSchema = z
 		}
 	})
 
+export async function loader({ request }: LoaderFunctionArgs) {
+	await requireAnonymous(request)
+
+	return json({})
+}
+
 export async function action({ request }: ActionFunctionArgs) {
 	const formData = await request.formData()
 	await validateCSRF(formData, request.headers)
@@ -70,19 +80,7 @@ export async function action({ request }: ActionFunctionArgs) {
 				return
 			}
 		}).transform(async data => {
-			const { username, email, password, name } = data
-
-			const user = await prisma.user.create({
-				select: { id: true },
-				data: {
-					email: email.toLowerCase(),
-					username: username.toLowerCase(),
-					name,
-					password: {
-						create: { hash: await bcrypt.hash(password, 10) },
-					},
-				},
-			})
+			const user = await signup(data)
 
 			return { ...data, user }
 		}),
