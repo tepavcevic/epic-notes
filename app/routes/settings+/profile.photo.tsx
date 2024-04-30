@@ -113,13 +113,15 @@ export default function PhotoRoute() {
 		id: 'profile-photo',
 		constraint: getZodConstraint(PhotoFormSchema),
 		lastResult: actionData,
+		// @ts-ignore
 		onValidate({ formData }) {
-			return parseWithZod(formData, { schema: PhotoFormSchema })
+			// we skip parsing the schema if intent is delete
+			if (formData.get('intent') !== 'delete') {
+				return parseWithZod(formData, { schema: PhotoFormSchema })
+			}
 		},
 		shouldRevalidate: 'onBlur',
 	})
-
-	console.log(fields.photoFile.value)
 
 	const isPending = useIsPending()
 

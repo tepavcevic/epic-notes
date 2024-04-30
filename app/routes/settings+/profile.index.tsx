@@ -1,7 +1,7 @@
 import { getFormProps, getInputProps, useForm } from '@conform-to/react'
 import { getZodConstraint, parseWithZod } from '@conform-to/zod'
 import { json, redirect, type LoaderFunctionArgs } from '@remix-run/node'
-import { Link, useFetcher, useLoaderData } from '@remix-run/react'
+import { type Fetcher, Link, useFetcher, useLoaderData } from '@remix-run/react'
 import { AuthenticityTokenInput } from 'remix-utils/csrf/react'
 import { z } from 'zod'
 import { ErrorList, Field } from '#app/components/forms.tsx'
@@ -175,10 +175,18 @@ async function profileUpdateAction({ userId, formData }: ProfileActionArgs) {
 	return json({ status: 'success', submission } as const)
 }
 
+const returnPossibleFormValue = (fetcher: Fetcher, fieldName: string) =>
+	(fetcher.formData ? fetcher.formData.get(fieldName) : '') as string
+
 function UpdateProfile() {
 	const data = useLoaderData<typeof loader>()
 
 	const fetcher = useFetcher<typeof profileUpdateAction>()
+
+	const username =
+		returnPossibleFormValue(fetcher, 'username') || data.user.username
+	const name = returnPossibleFormValue(fetcher, 'name') || data.user.name
+	const email = returnPossibleFormValue(fetcher, 'email') || data.user.email
 
 	const [form, fields] = useForm({
 		id: 'edit-profile',
@@ -188,9 +196,9 @@ function UpdateProfile() {
 			return parseWithZod(formData, { schema: ProfileFormSchema })
 		},
 		defaultValue: {
-			username: data.user.username,
-			name: data.user.name ?? '',
-			email: data.user.email,
+			username,
+			name: name ?? '',
+			email,
 		},
 	})
 
@@ -204,7 +212,9 @@ function UpdateProfile() {
 						htmlFor: fields.username.id,
 						children: 'Username',
 					}}
-					inputProps={{ ...getInputProps(fields.username, { type: 'text' }) }}
+					inputProps={{
+						...getInputProps(fields.username, { type: 'text' }),
+					}}
 					errors={fields.username.errors}
 				/>
 				<Field
