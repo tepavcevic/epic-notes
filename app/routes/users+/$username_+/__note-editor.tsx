@@ -26,9 +26,10 @@ import { Icon } from '#app/components/ui/icon.tsx'
 import { ImageChooser } from '#app/components/ui/image-chooser.tsx'
 import { Label } from '#app/components/ui/label.tsx'
 import { StatusButton } from '#app/components/ui/status-button.tsx'
+import { requireUser } from '#app/utils/auth.server.ts'
 import { validateCSRF } from '#app/utils/csrf.server.ts'
 import { prisma } from '#app/utils/db.server.ts'
-import { useIsPending } from '#app/utils/misc.tsx'
+import { invariantResponse, useIsPending } from '#app/utils/misc.tsx'
 
 const titleMinLength = 1
 const titleMaxLength = 100
@@ -70,6 +71,11 @@ const NoteEditorSchema = z.object({
 })
 
 export async function action({ request, params }: ActionFunctionArgs) {
+	const user = await requireUser(request)
+	invariantResponse(params.username === user.username, 'Unauthorized', {
+		status: 403,
+	})
+
 	const formData = await parseMultipartFormData(
 		request,
 		createMemoryUploadHandler({ maxPartSize: MAX_UPLOAD_SIZE }),

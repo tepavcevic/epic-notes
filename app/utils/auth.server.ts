@@ -19,16 +19,20 @@ export async function getUserId(request: Request) {
 		request.headers.get('cookie'),
 	)
 	const userId = cookieSession.get(userIdKey)
+
 	if (!userId) {
-		return null
+		return undefined
 	}
+
 	const user = await prisma.user.findUnique({
 		select: { id: true },
 		where: { id: userId },
 	})
+
 	if (!user) {
-		return logout({ request })
+		throw await logout({ request })
 	}
+
 	return user.id
 }
 
@@ -48,6 +52,20 @@ export async function requireUserId(request: Request) {
 	}
 
 	return userId
+}
+
+export async function requireUser(request: Request) {
+	const userId = await getUserId(request)
+	const user = await prisma.user.findUnique({
+		select: { id: true, username: true },
+		where: { id: userId },
+	})
+
+	if (!user) {
+		throw await logout({ request })
+	}
+
+	return user
 }
 
 export async function login({

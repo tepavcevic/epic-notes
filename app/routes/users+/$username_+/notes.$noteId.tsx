@@ -21,6 +21,7 @@ import { floatingToolbarClassName } from '#app/components/floating-toolbar.tsx'
 import { Button } from '#app/components/ui/button.tsx'
 import { Icon } from '#app/components/ui/icon.tsx'
 import { StatusButton } from '#app/components/ui/status-button.tsx'
+import { requireUser } from '#app/utils/auth.server.ts'
 import { validateCSRF } from '#app/utils/csrf.server.ts'
 import { prisma } from '#app/utils/db.server.ts'
 import {
@@ -59,6 +60,11 @@ export async function loader({ params }: LoaderFunctionArgs) {
 }
 
 export async function action({ request, params }: ActionFunctionArgs) {
+	const user = await requireUser(request)
+	invariantResponse(params.username === user.username, 'Unauthorized', {
+		status: 403,
+	})
+
 	const formData = await request.formData()
 	await validateCSRF(formData, request.headers)
 
