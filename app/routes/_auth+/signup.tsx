@@ -7,9 +7,10 @@ import {
 	json,
 	type LoaderFunctionArgs,
 } from '@remix-run/node'
-import { Form, useActionData } from '@remix-run/react'
+import { Form, useActionData, useSearchParams } from '@remix-run/react'
 import { AuthenticityTokenInput } from 'remix-utils/csrf/react'
 import { HoneypotInputs } from 'remix-utils/honeypot/react'
+import { safeRedirect } from 'remix-utils/safe-redirect'
 import { z } from 'zod'
 import { GeneralErrorBoundary } from '#app/components/error-boundary.tsx'
 import { CheckboxField, ErrorList, Field } from '#app/components/forms.tsx'
@@ -43,6 +44,7 @@ const SignupFormSchema = z
 				'You must agree to the terms of service and privacy policy',
 		}),
 		remember: z.boolean().optional(),
+		redirectTo: z.string().optional(),
 	})
 	.superRefine(({ confirmPassword, password }, ctx) => {
 		if (confirmPassword !== password) {
@@ -94,12 +96,12 @@ export async function action({ request }: ActionFunctionArgs) {
 		return json({ status: 'error', submission } as const, { status: 400 })
 	}
 
-	const { user, remember } = submission.value
+	const { user, remember, redirectTo } = submission.value
 	const cookie = request.headers.get('cookie')
 	const cookieSession = await sessionStorage.getSession(cookie)
 	cookieSession.set('userId', user.id)
 
-	return redirect('/', {
+	return redirect(safeRedirect(redirectTo), {
 		headers: {
 			'set-cookie': await sessionStorage.commitSession(cookieSession, {
 				expires: remember ? getSessionExpirationDate() : undefined,
@@ -111,9 +113,12 @@ export async function action({ request }: ActionFunctionArgs) {
 export default function SignupRoute() {
 	const actionData = useActionData<typeof action>()
 	const isPending = useIsPending()
+	const [searchParams] = useSearchParams()
+	const redirectTo = searchParams.get('redirectTo')
 
 	const [form, fields] = useForm({
 		id: 'signup-schema',
+		defaultValue: { redirectTo },
 		constraint: getZodConstraint(SignupFormSchema),
 		lastResult: actionData,
 		onValidate({ formData }) {
@@ -210,6 +215,8 @@ export default function SignupRoute() {
 						})}
 						errors={fields.remember.errors}
 					/>
+
+					<input {...getInputProps(fields.redirectTo, { type: 'hidden' })} />
 
 					<ErrorList errors={form.errors} id={form.errorId} />
 

@@ -6,9 +6,10 @@ import {
 	redirect,
 	type LoaderFunctionArgs,
 } from '@remix-run/node'
-import { Form, Link, useActionData } from '@remix-run/react'
+import { Form, Link, useActionData, useSearchParams } from '@remix-run/react'
 import { AuthenticityTokenInput } from 'remix-utils/csrf/react'
 import { HoneypotInputs } from 'remix-utils/honeypot/react'
+import { safeRedirect } from 'remix-utils/safe-redirect'
 import { z } from 'zod'
 import { Field, ErrorList, CheckboxField } from '#app/components/forms.tsx'
 import { Spacer } from '#app/components/spacer.tsx'
@@ -27,6 +28,7 @@ import { PasswordSchema, UsernameSchema } from '#app/utils/user-validation.ts'
 const LoginFormSchema = z.object({
 	username: UsernameSchema,
 	password: PasswordSchema,
+	redirectTo: z.string().optional(),
 	remember: z.boolean().optional(),
 })
 
@@ -68,13 +70,13 @@ export async function action({ request }: ActionFunctionArgs) {
 		return json({ status: 'error', submission } as const, { status: 400 })
 	}
 
-	const { user, remember } = submission.value
+	const { user, remember, redirectTo } = submission.value
 
 	const cookie = request.headers.get('cookie')
 	const cookieSession = await sessionStorage.getSession(cookie)
 	cookieSession.set('userId', user.id)
 
-	return redirect('/', {
+	return redirect(safeRedirect(redirectTo), {
 		headers: {
 			'set-cookie': await sessionStorage.commitSession(cookieSession, {
 				expires: remember ? getSessionExpirationDate() : undefined,
@@ -86,10 +88,13 @@ export async function action({ request }: ActionFunctionArgs) {
 export default function LoginPage() {
 	const lastResult = useActionData<typeof action>()
 	const isPending = useIsPending()
+	const [searchParams] = useSearchParams()
+	const redirectTo = searchParams.get('redirectTo')
 
 	const [form, fields] = useForm({
 		id: 'login-form',
 		constraint: getZodConstraint(LoginFormSchema),
+		defaultValue: { redirectTo },
 		lastResult,
 		onValidate({ formData }) {
 			return parseWithZod(formData, { schema: LoginFormSchema })
@@ -151,6 +156,10 @@ export default function LoginPage() {
 									</Link>
 								</div>
 							</div>
+
+							<input
+								{...getInputProps(fields.redirectTo, { type: 'hidden' })}
+							/>
 
 							<ErrorList errors={form.errors} id={form.errorId} />
 
