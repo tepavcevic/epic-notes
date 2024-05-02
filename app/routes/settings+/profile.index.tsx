@@ -8,7 +8,7 @@ import { ErrorList, Field } from '#app/components/forms.tsx'
 import { Button } from '#app/components/ui/button.tsx'
 import { Icon } from '#app/components/ui/icon.tsx'
 import { StatusButton } from '#app/components/ui/status-button.tsx'
-import { requireUserId } from '#app/utils/auth.server.ts'
+import { requireUserId, sessionKey } from '#app/utils/auth.server.ts'
 import { validateCSRF } from '#app/utils/csrf.server.ts'
 import { prisma } from '#app/utils/db.server.ts'
 import {
@@ -16,6 +16,7 @@ import {
 	invariantResponse,
 	useDoubleCheck,
 } from '#app/utils/misc.tsx'
+import { sessionStorage } from '#app/utils/session.server.ts'
 import {
 	EmailSchema,
 	NameSchema,
@@ -40,6 +41,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
 			image: {
 				select: { id: true },
 			},
+			_count: {
+				select: {
+					sessions: {
+						where: { expirationDate: { gt: new Date() } },
+					},
+				},
+			},
 		},
 	})
 
@@ -54,6 +62,7 @@ type ProfileActionArgs = {
 	formData: FormData
 }
 const profileUpdateActionIntent = 'update-profile'
+const signOutOfSessionsActionIntent = 'sign-out-of-sessions'
 const deleteDataActionIntent = 'delete-data'
 
 export async function action({ request }: LoaderFunctionArgs) {
@@ -67,6 +76,9 @@ export async function action({ request }: LoaderFunctionArgs) {
 		}
 		case deleteDataActionIntent: {
 			return deleteDataAction({ request, userId, formData })
+		}
+		case signOutOfSessionsActionIntent: {
+			return signOutOfSessionsAction({ request, userId, formData })
 		}
 		default: {
 			throw new Response(`Invalid intent "${intent}"`, { status: 400 })
@@ -119,6 +131,7 @@ export default function EditUserProfile() {
 						<Icon name="download">Download your data</Icon>
 					</a>
 				</div>
+				<SignOutOfSessions />
 				<DeleteData />
 			</div>
 		</div>
@@ -249,6 +262,61 @@ function UpdateProfile() {
 				</StatusButton>
 			</div>
 		</fetcher.Form>
+	)
+}
+
+async function signOutOfSessionsAction({
+	request,
+	userId,
+	formData,
+}: ProfileActionArgs) {
+	const cookie = request.headers.get('cookie')
+	const cookieSession = await sessionStorage.getSession(cookie)
+	const sessionId = cookieSession.get(sessionKey)
+
+	await prisma.session.deleteMany({
+		where: { userId, id: { not: sessionId } },
+	})
+
+	return json({ status: 'success' } as const)
+}
+
+function SignOutOfSessions() {
+	const data = useLoaderData<typeof loader>()
+	const dc = useDoubleCheck()
+
+	const fetcher = useFetcher<typeof signOutOfSessionsAction>()
+	const otherSessionCount = data.user._count.sessions - 1
+
+	return (
+		<div>
+			{otherSessionCount ? (
+				<fetcher.Form method="POST">
+					<AuthenticityTokenInput />
+					<StatusButton
+						{...dc.getButtonProps({
+							type: 'submit',
+							name: 'intent',
+							value: signOutOfSessionsActionIntent,
+						})}
+						variant={dc.doubleCheck ? 'destructive' : 'default'}
+						status={
+							fetcher.state !== 'idle'
+								? 'pending'
+								: fetcher.data?.status ?? 'idle'
+						}
+					>
+						<Icon name="avatar">
+							{dc.doubleCheck
+								? 'Are you sure?'
+								: `Sign out of ${otherSessionCount} other sessions?`}
+						</Icon>
+					</StatusButton>
+				</fetcher.Form>
+			) : (
+				<Icon name="avatar">This is your only session</Icon>
+			)}
+		</div>
 	)
 }
 
