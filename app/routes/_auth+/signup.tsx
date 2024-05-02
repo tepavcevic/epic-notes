@@ -15,11 +15,7 @@ import { z } from 'zod'
 import { GeneralErrorBoundary } from '#app/components/error-boundary.tsx'
 import { CheckboxField, ErrorList, Field } from '#app/components/forms.tsx'
 import { StatusButton } from '#app/components/ui/status-button.tsx'
-import {
-	getSessionExpirationDate,
-	requireAnonymous,
-	signup,
-} from '#app/utils/auth.server.ts'
+import { requireAnonymous, signup, sessionKey } from '#app/utils/auth.server.ts'
 import { validateCSRF } from '#app/utils/csrf.server.ts'
 import { prisma } from '#app/utils/db.server.ts'
 import { checkHoneypot } from '#app/utils/honeypot.server.ts'
@@ -82,9 +78,9 @@ export async function action({ request }: ActionFunctionArgs) {
 				return
 			}
 		}).transform(async data => {
-			const user = await signup(data)
+			const session = await signup(data)
 
-			return { ...data, user }
+			return { ...data, session }
 		}),
 		async: true,
 	})
@@ -92,19 +88,19 @@ export async function action({ request }: ActionFunctionArgs) {
 	if (submission.status !== 'success') {
 		return json(submission.reply())
 	}
-	if (!submission.value?.user) {
+	if (!submission.value?.session) {
 		return json({ status: 'error', submission } as const, { status: 400 })
 	}
 
-	const { user, remember, redirectTo } = submission.value
+	const { session, remember, redirectTo } = submission.value
 	const cookie = request.headers.get('cookie')
 	const cookieSession = await sessionStorage.getSession(cookie)
-	cookieSession.set('userId', user.id)
+	cookieSession.set(sessionKey, session.id)
 
 	return redirect(safeRedirect(redirectTo), {
 		headers: {
 			'set-cookie': await sessionStorage.commitSession(cookieSession, {
-				expires: remember ? getSessionExpirationDate() : undefined,
+				expires: remember ? session.expirationDate : undefined,
 			}),
 		},
 	})

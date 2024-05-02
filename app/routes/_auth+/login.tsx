@@ -14,11 +14,7 @@ import { z } from 'zod'
 import { Field, ErrorList, CheckboxField } from '#app/components/forms.tsx'
 import { Spacer } from '#app/components/spacer.tsx'
 import { StatusButton } from '#app/components/ui/status-button.tsx'
-import {
-	getSessionExpirationDate,
-	login,
-	requireAnonymous,
-} from '#app/utils/auth.server.ts'
+import { login, requireAnonymous, sessionKey } from '#app/utils/auth.server.ts'
 import { validateCSRF } from '#app/utils/csrf.server.ts'
 import { checkHoneypot } from '#app/utils/honeypot.server.ts'
 import { useIsPending } from '#app/utils/misc.tsx'
@@ -45,9 +41,11 @@ export async function action({ request }: ActionFunctionArgs) {
 	checkHoneypot(formData)
 	const submission = await parseWithZod(formData, {
 		schema: LoginFormSchema.transform(async (data, ctx) => {
-			const user = await login(data)
+			const session = await login(data)
 
-			if (!user) {
+			console.log(session)
+
+			if (!session) {
 				ctx.addIssue({
 					code: 'custom',
 					message: 'Invalid username or password',
@@ -55,7 +53,7 @@ export async function action({ request }: ActionFunctionArgs) {
 				return z.NEVER
 			}
 
-			return { ...data, user: { id: user.id } }
+			return { ...data, session }
 		}),
 		async: true,
 	})
@@ -66,20 +64,20 @@ export async function action({ request }: ActionFunctionArgs) {
 		return json(submission.reply())
 	}
 
-	if (!submission.value?.user) {
+	if (!submission.value?.session) {
 		return json({ status: 'error', submission } as const, { status: 400 })
 	}
 
-	const { user, remember, redirectTo } = submission.value
+	const { session, remember, redirectTo } = submission.value
 
 	const cookie = request.headers.get('cookie')
 	const cookieSession = await sessionStorage.getSession(cookie)
-	cookieSession.set('userId', user.id)
+	cookieSession.set(sessionKey, session.id)
 
 	return redirect(safeRedirect(redirectTo), {
 		headers: {
 			'set-cookie': await sessionStorage.commitSession(cookieSession, {
-				expires: remember ? getSessionExpirationDate() : undefined,
+				expires: remember ? session.expirationDate : undefined,
 			}),
 		},
 	})

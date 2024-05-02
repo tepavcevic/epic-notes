@@ -10,13 +10,3 @@ export const sessionStorage = createCookieSessionStorage({
 		secrets: process.env.SESSION_SECRET.split(','),
 	},
 })
-
-export async function getUserId(request: Request) {
-	const cookie = request.headers.get('cookie')
-
-	const cookieSession = await sessionStorage.getSession(cookie)
-
-	const userId = cookieSession.get('userId') ?? null
-
-	return { userId }
-}

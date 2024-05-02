@@ -35,6 +35,7 @@ import { Icon } from './components/ui/icon.tsx'
 import useTheme from './hooks/useTheme.tsx'
 import fontStylestylesheetUrl from './styles/font.css'
 import tailwindStylesheetUrl from './styles/tailwind.css'
+import { getUserId } from './utils/auth.server.ts'
 import { csrf } from './utils/csrf.server.ts'
 import { prisma } from './utils/db.server.ts'
 import { getEnv } from './utils/env.server.ts'
@@ -45,7 +46,7 @@ import {
 	invariantResponse,
 } from './utils/misc.tsx'
 import { userHasRole } from './utils/permissions.ts'
-import { getUserId, sessionStorage } from './utils/session.server.ts'
+import { sessionStorage } from './utils/session.server.ts'
 import { getTheme, setTheme, type Theme } from './utils/theme.server.ts'
 import { getToast } from './utils/toast.server.ts'
 import { useOptionalUser } from './utils/user.ts'
@@ -69,7 +70,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 	const [csrfToken, csrfCookieHeader] = await csrf.commitToken(request)
 	const honeyProps = honeypot.getInputProps()
 	const { toast, headers: toastHeaders } = await getToast(request)
-	const { userId } = await getUserId(request)
+	const userId = await getUserId(request)
 	const cookieSession = await sessionStorage.getSession(
 		request.headers.get('cookie'),
 	)
