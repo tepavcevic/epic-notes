@@ -31,6 +31,7 @@ import ShowToast from './components/show-toast.tsx'
 import { Spacer } from './components/spacer.tsx'
 import ThemeSwitch from './components/theme-switch.tsx'
 import { Button } from './components/ui/button.tsx'
+import { Icon } from './components/ui/icon.tsx'
 import useTheme from './hooks/useTheme.tsx'
 import fontStylestylesheetUrl from './styles/font.css'
 import tailwindStylesheetUrl from './styles/tailwind.css'
@@ -43,6 +44,7 @@ import {
 	getUserImgSrc,
 	invariantResponse,
 } from './utils/misc.tsx'
+import { userHasRole } from './utils/permissions.ts'
 import { getUserId, sessionStorage } from './utils/session.server.ts'
 import { getTheme, setTheme, type Theme } from './utils/theme.server.ts'
 import { getToast } from './utils/toast.server.ts'
@@ -78,6 +80,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
 					id: true,
 					username: true,
 					name: true,
+					roles: {
+						select: {
+							name: true,
+							permissions: {
+								select: { action: true, entity: true, access: true },
+							},
+						},
+					},
 					image: { select: { id: true } },
 				},
 				where: { id: userId },
@@ -178,6 +188,7 @@ function App() {
 	const matches = useMatches()
 	const isOnSearchPage = matches.find(m => m.id === 'routes/users+/index')
 	const user = useOptionalUser()
+	const userIsAdmin = userHasRole(data.user, 'admin')
 
 	return (
 		<Document theme={theme} env={data.ENV} isLoggedIn={!!user?.id}>
@@ -210,6 +221,15 @@ function App() {
 										</span>
 									</Link>
 								</Button>
+								{userIsAdmin ? (
+									<Button asChild variant="secondary">
+										<Link to="/admin">
+											<Icon name="backpack">
+												<span className="hidden sm:block">Admin</span>
+											</Icon>
+										</Link>
+									</Button>
+								) : null}
 							</div>
 						) : (
 							<Button asChild variant="default" size="sm">

@@ -29,6 +29,10 @@ import {
 	invariantResponse,
 	useIsPending,
 } from '#app/utils/misc.tsx'
+import {
+	requireUserWithPermission,
+	userHasPermission,
+} from '#app/utils/permissions.ts'
 import { toastSessionStorage } from '#app/utils/toast.server.ts'
 import { useOptionalUser } from '#app/utils/user.ts'
 import { type loader as noteLoader } from './notes.tsx'
@@ -59,12 +63,8 @@ export async function loader({ params }: LoaderFunctionArgs) {
 	return json({ note, timeAgo })
 }
 
-export async function action({ request, params }: ActionFunctionArgs) {
+export async function action({ request }: ActionFunctionArgs) {
 	const user = await requireUser(request)
-	invariantResponse(params.username === user.username, 'Unauthorized', {
-		status: 403,
-	})
-
 	const formData = await request.formData()
 	await validateCSRF(formData, request.headers)
 
@@ -81,10 +81,16 @@ export async function action({ request, params }: ActionFunctionArgs) {
 	const { noteId } = submission.value
 
 	const note = await prisma.note.findFirst({
-		select: { id: true, owner: { select: { username: true } } },
-		where: { id: noteId, owner: { username: params.username } },
+		select: { id: true, ownerId: true, owner: { select: { username: true } } },
+		where: { id: noteId },
 	})
 	invariantResponse(note, 'Not found', { status: 404 })
+
+	const isOwner = user.id === note.ownerId
+	await requireUserWithPermission(
+		request,
+		isOwner ? 'delete:note:own' : 'delete:note:any',
+	)
 
 	await prisma.note.delete({ where: { id: noteId } })
 
@@ -107,6 +113,11 @@ export default function NoteIdRoute() {
 	const data = useLoaderData<typeof loader>()
 	const user = useOptionalUser()
 	const isOwner = user?.id === data.note.ownerId
+	const canDelete = userHasPermission(
+		user,
+		isOwner ? 'delete:note:own' : 'delete:note:any',
+	)
+	const displayBar = canDelete || isOwner
 
 	return (
 		<div className="absolute inset-0 flex flex-col px-10">
@@ -129,7 +140,7 @@ export default function NoteIdRoute() {
 					{data.note.content}
 				</p>
 			</div>
-			{isOwner && (
+			{displayBar && (
 				<div className={floatingToolbarClassName}>
 					<span className="text-sm text-foreground/90 max-[524px]:hidden">
 						<Icon name="clock" className="scale-125">
@@ -212,6 +223,7 @@ export function ErrorBoundary() {
 	return (
 		<GeneralErrorBoundary
 			statusHandlers={{
+				403: () => <p>You do not have permission</p>,
 				404: ({ params }) => <p>Note {params.noteId} not found</p>,
 			}}
 		/>
