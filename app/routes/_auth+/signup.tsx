@@ -18,6 +18,7 @@ import { StatusButton } from '#app/components/ui/status-button.tsx'
 import { requireAnonymous, signup, sessionKey } from '#app/utils/auth.server.ts'
 import { validateCSRF } from '#app/utils/csrf.server.ts'
 import { prisma } from '#app/utils/db.server.ts'
+import { sendEmail } from '#app/utils/email.server.ts'
 import { checkHoneypot } from '#app/utils/honeypot.server.ts'
 import { useIsPending } from '#app/utils/misc.tsx'
 import { sessionStorage } from '#app/utils/session.server.ts'
@@ -54,6 +55,15 @@ const SignupFormSchema = z
 
 export async function loader({ request }: LoaderFunctionArgs) {
 	await requireAnonymous(request)
+
+	const response = await sendEmail({
+		to: 'whatever',
+		subject: 'hello world',
+		text: 'this is a plain text version',
+		html: '<p>this is the html version</p>',
+	})
+
+	console.log(response)
 
 	return json({})
 }
