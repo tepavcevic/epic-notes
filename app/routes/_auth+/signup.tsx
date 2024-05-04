@@ -1,5 +1,6 @@
 import { getFormProps, getInputProps, useForm } from '@conform-to/react'
 import { getZodConstraint, parseWithZod } from '@conform-to/zod'
+import { generateTOTP } from '@epic-web/totp'
 import {
 	type ActionFunctionArgs,
 	redirect,
@@ -19,10 +20,9 @@ import { validateCSRF } from '#app/utils/csrf.server.ts'
 import { prisma } from '#app/utils/db.server.ts'
 import { sendEmail } from '#app/utils/email.server.ts'
 import { checkHoneypot } from '#app/utils/honeypot.server.ts'
-import { useIsPending } from '#app/utils/misc.tsx'
+import { getDomainUrl, useIsPending } from '#app/utils/misc.tsx'
 import { EmailSchema } from '#app/utils/user-validation.ts'
-import { verifySessionStorage } from '#app/utils/verification.server.ts'
-import { onboardingEmailSessionKey } from './onboarding.tsx'
+import { codeQueryParam, targetQueryParam, typeQueryParam } from './verify.tsx'
 
 const SignupSchema = z.object({
 	email: EmailSchema,
@@ -31,15 +31,6 @@ const SignupSchema = z.object({
 
 export async function loader({ request }: LoaderFunctionArgs) {
 	await requireAnonymous(request)
-
-	// const response = await sendEmail({
-	// 	to: 'whatever',
-	// 	subject: 'hello world',
-	// 	text: 'this is a plain text version',
-	// 	html: '<p>this is the html version</p>',
-	// })
-
-	// console.log(response)
 
 	return json({})
 }
@@ -76,25 +67,40 @@ export async function action({ request }: ActionFunctionArgs) {
 
 	const { email } = submission.value
 
-	const response = await sendEmail({
-		to: email,
-		subject: 'hello world',
-		text: 'this is a plain text version',
-		html: '<p>this is the html version</p>',
+	const { otp, ...verificationConfig } = generateTOTP({
+		algorithm: 'SHA256',
+		period: 10 * 60,
 	})
 
-	console.log(response)
+	const redirectToUrl = new URL(`${getDomainUrl(request)}/verify`)
+	const type = 'onboarding'
+	redirectToUrl.searchParams.set(typeQueryParam, type)
+	redirectToUrl.searchParams.set(targetQueryParam, email)
+
+	const verifyUrl = new URL(redirectToUrl)
+	verifyUrl.searchParams.set(codeQueryParam, otp)
+
+	const verificationData = {
+		type,
+		target: email,
+		...verificationConfig,
+		expiresAt: new Date(Date.now() + 1000 * verificationConfig.period),
+	}
+
+	await prisma.verification.upsert({
+		where: { target_type: { type, target: email } },
+		create: verificationData,
+		update: verificationData,
+	})
+
+	const response = await sendEmail({
+		to: email,
+		subject: 'Welcome aboard',
+		text: `Test email, duh. Enter this ${otp} over here: ${verifyUrl}.`,
+	})
 
 	if (response.status === 'success') {
-		const cookie = request.headers.get('cookie')
-		const verificationSession = await verifySessionStorage.getSession(cookie)
-		verificationSession.set(onboardingEmailSessionKey, email)
-		return redirect('/onboarding', {
-			headers: {
-				'set-cookie':
-					await verifySessionStorage.commitSession(verificationSession),
-			},
-		})
+		return redirect(redirectToUrl.toString())
 	} else {
 		return json(submission.reply({ formErrors: [response.error] }))
 	}

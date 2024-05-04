@@ -117,3 +117,22 @@ model Role {
   users       User[]
   permissions Permission[]
 }
+
+model Verification {
+  id String @id @default(cuid())
+
+  createdAt DateTime @default(now())
+  type      String // e.g. email, phone
+  target    String // e.g. user's email or phone number
+
+  // stuff for otp
+  secret    String
+  algorithm String
+  digits    Int
+  period    Int
+  charSet   String
+
+  expiresAt DateTime?
+
+  @@unique([target, type])
+}
