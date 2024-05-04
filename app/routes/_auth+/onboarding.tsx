@@ -24,7 +24,7 @@ import { requireAnonymous, sessionKey, signup } from '#app/utils/auth.server.ts'
 import { validateCSRF } from '#app/utils/csrf.server.ts'
 import { prisma } from '#app/utils/db.server.ts'
 import { checkHoneypot } from '#app/utils/honeypot.server.ts'
-import { useIsPending } from '#app/utils/misc.tsx'
+import { invariant, useIsPending } from '#app/utils/misc.tsx'
 import {
 	EmailSchema,
 	NameSchema,
@@ -32,6 +32,7 @@ import {
 	UsernameSchema,
 } from '#app/utils/user-validation.ts'
 import { verifySessionStorage } from '#app/utils/verification.server.ts'
+import { type VerifyFunctionArgs } from './verify.tsx'
 
 export const onboardingEmailSessionKey = 'onboardingEmail'
 
@@ -60,6 +61,7 @@ const SignupFormSchema = z
 	})
 
 async function requireOnboardingEmail(request: Request) {
+	await requireAnonymous(request)
 	const cookie = request.headers.get('cookie')
 	const verifySession = await verifySessionStorage.getSession(cookie)
 	const email = verifySession.get(onboardingEmailSessionKey)
@@ -79,9 +81,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-	await requireAnonymous(request)
 	const email = await requireOnboardingEmail(request)
-
 	const formData = await request.formData()
 	await validateCSRF(formData, request.headers)
 	checkHoneypot(formData)
@@ -134,6 +134,25 @@ export async function action({ request }: ActionFunctionArgs) {
 	)
 
 	return redirect(safeRedirect(redirectTo), { headers })
+}
+
+export async function handleVerification({
+	request,
+	submission,
+}: VerifyFunctionArgs) {
+	invariant(
+		submission.status === 'success',
+		'submission.value should be here by now',
+	)
+	const cookie = request.headers.get('cookie')
+	const verifySession = await verifySessionStorage.getSession(cookie)
+	verifySession.set(onboardingEmailSessionKey, submission.value.target)
+
+	return redirect('/onboarding', {
+		headers: {
+			'set-cookie': await verifySessionStorage.commitSession(verifySession),
+		},
+	})
 }
 
 export const meta: MetaFunction = () => {
