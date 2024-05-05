@@ -29,13 +29,14 @@ import { prisma } from '#app/utils/db.server.ts'
 import { checkHoneypot } from '#app/utils/honeypot.server.ts'
 import { getDomainUrl, useIsPending } from '#app/utils/misc.tsx'
 import { handleVerification as handleOnboardingVerification } from './onboarding.tsx'
+import { handleVerification as handleResetPasswordVerification } from './reset-password.tsx'
 
 export const codeQueryParam = 'code'
 export const targetQueryParam = 'target'
 export const typeQueryParam = 'type'
 export const redirectToQueryParam = 'redirectTo'
 
-const types = ['onboarding'] as const
+const types = ['onboarding', 'forgot-password'] as const
 const VerificationTypeSchema = z.enum(types)
 type VerificationTypes = z.infer<typeof VerificationTypeSchema>
 
@@ -51,13 +52,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 	if (!params.has(codeQueryParam)) {
 		return json({
-			status: 'idle',
+			status: undefined,
 			submission: {
 				intent: '',
 				payload: Object.fromEntries(params) as Record<string, unknown>,
 				error: {} as Record<string, Array<string>>,
-			} as const,
-		})
+			},
+		} as const)
 	}
 
 	return validateRequest(request, params)
@@ -217,7 +218,8 @@ async function validateRequest(
 	switch (submissionValue[typeQueryParam]) {
 		case 'onboarding':
 			return handleOnboardingVerification({ request, submission, body })
-			break
+		case 'forgot-password':
+			return handleResetPasswordVerification({ body, request, submission })
 
 		default:
 			break
@@ -237,7 +239,7 @@ export default function VerifyRoute() {
 	const [form, fields] = useForm({
 		id: 'verify-form',
 		constraint: getZodConstraint(VerifySchema),
-		lastResult: actionData ?? data?.submission,
+		lastResult: actionData ?? data.submission,
 		onValidate({ formData }) {
 			return parseWithZod(formData, { schema: VerifySchema })
 		},

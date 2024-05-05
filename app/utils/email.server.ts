@@ -10,7 +10,7 @@ const ResendErrorSchema = z.union([
 	}),
 	z.object({
 		name: z.literal('UnknownError'),
-		message: z.literal('UnknownError'),
+		message: z.literal('Unknown Error'),
 		statusCode: z.literal(500),
 		cause: z.any(),
 	}),
@@ -39,7 +39,7 @@ export async function sendEmail({
 		...(react ? await renderReactEmail(react) : null),
 	}
 
-	const response = await fetch('http://api.resend.com/emails', {
+	const response = await fetch('https://api.resend.com/emails', {
 		method: 'POST',
 		body: JSON.stringify(email),
 		headers: {
@@ -57,15 +57,23 @@ export async function sendEmail({
 			data: parsedData,
 		} as const
 	} else {
-		return {
-			status: 'error',
-			error: {
-				name: 'UnknownError',
-				message: 'UnknownError',
-				statusCode: 500,
-				cause: data,
-			} satisfies ResendError,
-		} as const
+		const parseResult = ResendErrorSchema.safeParse(data)
+		if (parseResult.success) {
+			return {
+				status: 'error',
+				error: parseResult.data,
+			} as const
+		} else {
+			return {
+				status: 'error',
+				error: {
+					name: 'UnknownError',
+					message: 'Unknown Error',
+					statusCode: 500,
+					cause: data,
+				} satisfies ResendError,
+			} as const
+		}
 	}
 }
 
