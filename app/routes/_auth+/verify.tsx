@@ -28,6 +28,7 @@ import { validateCSRF } from '#app/utils/csrf.server.ts'
 import { prisma } from '#app/utils/db.server.ts'
 import { checkHoneypot } from '#app/utils/honeypot.server.ts'
 import { getDomainUrl, useIsPending } from '#app/utils/misc.tsx'
+import { handleVerification as handleChangeEmailVerification } from '../settings+/profile.change-email.tsx'
 import { handleVerification as handleOnboardingVerification } from './onboarding.tsx'
 import { handleVerification as handleResetPasswordVerification } from './reset-password.tsx'
 
@@ -36,7 +37,7 @@ export const targetQueryParam = 'target'
 export const typeQueryParam = 'type'
 export const redirectToQueryParam = 'redirectTo'
 
-const types = ['onboarding', 'forgot-password'] as const
+const types = ['onboarding', 'forgot-password', 'change-email'] as const
 const VerificationTypeSchema = z.enum(types)
 type VerificationTypes = z.infer<typeof VerificationTypeSchema>
 
@@ -220,6 +221,8 @@ async function validateRequest(
 			return handleOnboardingVerification({ request, submission, body })
 		case 'forgot-password':
 			return handleResetPasswordVerification({ body, request, submission })
+		case 'change-email':
+			return handleChangeEmailVerification({ request, submission, body })
 
 		default:
 			break

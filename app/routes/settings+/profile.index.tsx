@@ -119,6 +119,13 @@ export default function EditUserProfile() {
 			<div className="col-span-6 my-6 h-1 border-b-[1.5px] border-foreground" />
 			<div className="col-span-full flex flex-col gap-6">
 				<div>
+					<Link to="change-email">
+						<Icon name="envelope-closed">
+							Change email from {data.user.email}
+						</Icon>
+					</Link>
+				</div>
+				<div>
 					<Link to="password">
 						<Icon name="dots-horizontal">Change Password</Icon>
 					</Link>
