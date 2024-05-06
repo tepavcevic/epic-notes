@@ -29,6 +29,7 @@ import { prisma } from '#app/utils/db.server.ts'
 import { checkHoneypot } from '#app/utils/honeypot.server.ts'
 import { getDomainUrl, useIsPending } from '#app/utils/misc.tsx'
 import { handleVerification as handleChangeEmailVerification } from '../settings+/profile.change-email.tsx'
+import { type twoFAVerifyVerificationType } from '../settings+/profile.two-factor.verify.tsx'
 import { handleVerification as handleOnboardingVerification } from './onboarding.tsx'
 import { handleVerification as handleResetPasswordVerification } from './reset-password.tsx'
 
@@ -37,9 +38,9 @@ export const targetQueryParam = 'target'
 export const typeQueryParam = 'type'
 export const redirectToQueryParam = 'redirectTo'
 
-const types = ['onboarding', 'forgot-password', 'change-email'] as const
+const types = ['onboarding', 'forgot-password', 'change-email', '2fa'] as const
 const VerificationTypeSchema = z.enum(types)
-type VerificationTypes = z.infer<typeof VerificationTypeSchema>
+export type VerificationTypes = z.infer<typeof VerificationTypeSchema>
 
 const VerifySchema = z.object({
 	[codeQueryParam]: z.string().min(6).max(6),
@@ -150,7 +151,7 @@ export async function isCodeValid({
 	target,
 }: {
 	code: string
-	type: VerificationTypes
+	type: VerificationTypes | typeof twoFAVerifyVerificationType
 	target: string
 }) {
 	const verification = await prisma.verification.findUnique({
@@ -223,9 +224,8 @@ async function validateRequest(
 			return handleResetPasswordVerification({ body, request, submission })
 		case 'change-email':
 			return handleChangeEmailVerification({ request, submission, body })
-
-		default:
-			break
+		case '2fa':
+			throw new Error('not yet implemented')
 	}
 }
 

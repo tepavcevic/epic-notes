@@ -22,6 +22,7 @@ import {
 	NameSchema,
 	UsernameSchema,
 } from '#app/utils/user-validation.ts'
+import { twoFAVerificationType } from './profile.two-factor.tsx'
 
 const ProfileFormSchema = z.object({
 	name: NameSchema.optional(),
@@ -53,7 +54,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 	invariantResponse(user, 'User not found', { status: 404 })
 
-	return json({ user })
+	const verification = await prisma.verification.findFirst({
+		select: { id: true },
+		where: { target: user.id, type: twoFAVerificationType },
+	})
+
+	return json({ user, isTwoFAEnabled: Boolean(verification) })
 }
 
 type ProfileActionArgs = {
@@ -123,6 +129,15 @@ export default function EditUserProfile() {
 						<Icon name="envelope-closed">
 							Change email from {data.user.email}
 						</Icon>
+					</Link>
+				</div>
+				<div>
+					<Link to="two-factor">
+						{data.isTwoFAEnabled ? (
+							<Icon name="lock-closed">2FA is enabled</Icon>
+						) : (
+							<Icon name="lock-open-1">Enable 2FA</Icon>
+						)}
 					</Link>
 				</div>
 				<div>
