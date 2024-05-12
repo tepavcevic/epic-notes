@@ -1,10 +1,8 @@
 import { generateTOTP } from '@epic-web/totp'
 
-if (process.argv.length < 3) {
-	console.log('Usage: node otp-script.js <2FA otp url>')
-	process.exit(1) // Exit with error
-}
-const otpUri = new URL(process.argv[2])
+const otpUri = new URL(
+	'otpauth://totp/localhost%3A3000:kody%40example.dev?secret=WKVMR5MZRL56PFYE&issuer=localhost%3A3000&algorithm=SHA1&digits=6&period=30',
+)
 const { secret, algorithm, digits, period } = Object.fromEntries(
 	otpUri.searchParams.entries(),
 )

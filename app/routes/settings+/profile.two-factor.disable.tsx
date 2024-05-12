@@ -9,26 +9,62 @@ import { Icon } from '#app/components/ui/icon.tsx'
 import { StatusButton } from '#app/components/ui/status-button.tsx'
 import { requireUserId } from '#app/utils/auth.server.ts'
 import { validateCSRF } from '#app/utils/csrf.server.ts'
+import { prisma } from '#app/utils/db.server.ts'
 import { useDoubleCheck, useIsPending } from '#app/utils/misc.tsx'
 import { redirectWithToast } from '#app/utils/toast.server.ts'
+import { shouldRequestTwoFA } from '../_auth+/login.tsx'
+import { getRedirectToUrl } from '../_auth+/verify.tsx'
+import { twoFAVerificationType } from './profile.two-factor.tsx'
 
 export const handle = {
 	breadcrumb: <Icon name="lock-open-1">Disable</Icon>,
 }
 
+export async function requireRecentVerification({
+	request,
+	userId,
+}: {
+	request: Request
+	userId: string
+}) {
+	const shouldReverify = await shouldRequestTwoFA({ request, userId })
+
+	if (shouldReverify) {
+		const reqUrl = new URL(request.url)
+		const verifyUrl = getRedirectToUrl({
+			request,
+			target: userId,
+			type: twoFAVerificationType,
+			redirectTo: `${reqUrl.pathname}${reqUrl.search}`,
+		})
+		throw await redirectWithToast(verifyUrl.toString(), {
+			type: 'message',
+			title: 'Please Reverify',
+			description: 'You must reverify your account before disabling 2FA',
+		})
+	}
+}
+
 export async function loader({ request }: LoaderFunctionArgs) {
-	await requireUserId(request)
+	const userId = await requireUserId(request)
+	await requireRecentVerification({ request, userId })
 	return json({})
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-	await requireUserId(request)
+	const userId = await requireUserId(request)
+	await requireRecentVerification({ request, userId })
 	const formData = await request.formData()
 	await validateCSRF(formData, request.headers)
+
+	await prisma.verification.delete({
+		where: { target_type: { type: twoFAVerificationType, target: userId } },
+	})
+
 	throw await redirectWithToast('/settings/profile/two-factor', {
-		title: '2FA Disabled (jk)',
-		description: 'This has not yet been implemented',
-		type: 'error',
+		title: '2FA Disabled',
+		description: 'Two factor authentication has been disabled.',
+		type: 'success',
 	})
 }
 

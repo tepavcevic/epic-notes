@@ -26,6 +26,7 @@ import { verifySessionStorage } from '#app/utils/verification.server.ts'
 import { twoFAVerificationType } from '../settings+/profile.two-factor.tsx'
 import { type VerifyFunctionArgs, getRedirectToUrl } from './verify.tsx'
 
+const verifiedTimeKey = 'verified-time'
 const unverifiedSessionIdKey = 'unverified-session-id'
 const rememberKey = 'remember-me'
 
@@ -41,32 +42,42 @@ export async function handleVerification({
 	const cookie = request.headers.get('cookie')
 	const verifySession = await verifySessionStorage.getSession(cookie)
 	const cookieSession = await sessionStorage.getSession(cookie)
-	const unverifiedSessionId = verifySession.get(unverifiedSessionIdKey)
+
 	const rememberMe = verifySession.get(rememberKey)
+	const { redirectTo } = submission.value
+	const headers = new Headers()
 
-	const session = await prisma.session.findUnique({
-		where: { id: unverifiedSessionId },
-		select: { expirationDate: true },
-	})
+	cookieSession.set(verifiedTimeKey, Date.now())
 
-	if (!session) {
-		throw await redirectWithToast('/login', {
-			type: 'error',
-			title: 'Invalid session',
-			description: 'Could not find session to verify. Please try again.',
+	const unverifiedSessionId = verifySession.get(unverifiedSessionIdKey)
+	if (unverifiedSessionId) {
+		const session = await prisma.session.findUnique({
+			where: { id: unverifiedSessionId },
+			select: { expirationDate: true },
 		})
+
+		if (!session) {
+			throw await redirectWithToast('/login', {
+				type: 'error',
+				title: 'Invalid session',
+				description: 'Could not find session to verify. Please try again.',
+			})
+		}
+
+		cookieSession.set(sessionKey, unverifiedSessionId)
+		headers.append(
+			'set-cookie',
+			await sessionStorage.commitSession(cookieSession, {
+				expires: rememberMe ? session.expirationDate : undefined,
+			}),
+		)
+	} else {
+		headers.append(
+			'set-cookie',
+			await sessionStorage.commitSession(cookieSession),
+		)
 	}
 
-	cookieSession.set(sessionKey, unverifiedSessionId)
-	const { redirectTo } = submission.value
-
-	const headers = new Headers()
-	headers.append(
-		'set-cookie',
-		await sessionStorage.commitSession(cookieSession, {
-			expires: rememberMe ? session.expirationDate : undefined,
-		}),
-	)
 	headers.append(
 		'set-cookie',
 		await verifySessionStorage.destroySession(verifySession),
@@ -86,6 +97,40 @@ export async function loader({ request }: LoaderFunctionArgs) {
 	await requireAnonymous(request)
 
 	return json({})
+}
+
+export async function shouldRequestTwoFA({
+	request,
+	userId,
+}: {
+	request: Request
+	userId: string
+}) {
+	const cookie = request.headers.get('cookie')
+	const verifySession = await verifySessionStorage.getSession(cookie)
+	const unverifiedSessionId = verifySession.get(unverifiedSessionIdKey)
+
+	if (unverifiedSessionId) return true
+
+	const verification = await prisma.verification.findUnique({
+		select: { id: true },
+		where: {
+			target_type: {
+				target: userId,
+				type: twoFAVerificationType,
+			},
+		},
+	})
+
+	const userHasTwoFA = Boolean(verification)
+	if (!userHasTwoFA) return false
+
+	const cookieSession = await sessionStorage.getSession(cookie)
+	const verifiedTime = new Date(cookieSession.get(verifiedTimeKey) ?? 0)
+	const twoHours = 1000 * 60 * 60 * 2
+	// const twoHours = 10 * 2
+
+	return Date.now() - verifiedTime.getTime() > twoHours
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -122,16 +167,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
 	const { session, remember, redirectTo } = submission.value
 
-	const verification = await prisma.verification.findUnique({
-		select: { id: true },
-		where: {
-			target_type: { target: session.userId, type: twoFAVerificationType },
-		},
-	})
-
-	const userHasTwoFA = Boolean(verification)
-
-	if (userHasTwoFA) {
+	if (await shouldRequestTwoFA({ request, userId: session.userId })) {
 		// not passing any cookie to getSession so we can create a new verification flow
 		const verifySession = await verifySessionStorage.getSession()
 		verifySession.set(unverifiedSessionIdKey, session.id)
