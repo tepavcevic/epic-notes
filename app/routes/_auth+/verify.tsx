@@ -18,6 +18,7 @@ import {
 	useLoaderData,
 	useSearchParams,
 } from '@remix-run/react'
+import { type ReactNode } from 'react'
 import { AuthenticityTokenInput } from 'remix-utils/csrf/react'
 import { z } from 'zod'
 import { GeneralErrorBoundary } from '#app/components/error-boundary.tsx'
@@ -30,6 +31,7 @@ import { checkHoneypot } from '#app/utils/honeypot.server.ts'
 import { getDomainUrl, useIsPending } from '#app/utils/misc.tsx'
 import { handleVerification as handleChangeEmailVerification } from '../settings+/profile.change-email.tsx'
 import { type twoFAVerifyVerificationType } from '../settings+/profile.two-factor.verify.tsx'
+import { handleVerification as handle2FAVerification } from './login.tsx'
 import { handleVerification as handleOnboardingVerification } from './onboarding.tsx'
 import { handleVerification as handleResetPasswordVerification } from './reset-password.tsx'
 
@@ -208,24 +210,30 @@ async function validateRequest(
 	}
 
 	const { value: submissionValue } = submission
-	await prisma.verification.delete({
-		where: {
-			target_type: {
-				target: submissionValue[targetQueryParam],
-				type: submissionValue[typeQueryParam],
+
+	async function deleteVerification() {
+		await prisma.verification.delete({
+			where: {
+				target_type: {
+					target: submissionValue[targetQueryParam],
+					type: submissionValue[typeQueryParam],
+				},
 			},
-		},
-	})
+		})
+	}
 
 	switch (submissionValue[typeQueryParam]) {
 		case 'onboarding':
+			deleteVerification()
 			return handleOnboardingVerification({ request, submission, body })
 		case 'forgot-password':
+			deleteVerification()
 			return handleResetPasswordVerification({ body, request, submission })
 		case 'change-email':
+			deleteVerification()
 			return handleChangeEmailVerification({ request, submission, body })
 		case '2fa':
-			throw new Error('not yet implemented')
+			return handle2FAVerification({ request, submission, body })
 	}
 }
 
@@ -238,6 +246,30 @@ export default function VerifyRoute() {
 	const actionData = useActionData<typeof action>()
 	const isPending = useIsPending()
 	const [searchParams] = useSearchParams()
+	const type = VerificationTypeSchema.parse(searchParams.get(typeQueryParam))
+
+	const checkEmail = (
+		<>
+			<h1 className="text-h1">Check your email</h1>
+			<p className="mt-3 text-body-md text-muted-foreground">
+				We&apos;ve sent you a code to verify your email address.
+			</p>
+		</>
+	)
+
+	const headings: Record<VerificationTypes, ReactNode> = {
+		onboarding: checkEmail,
+		'forgot-password': checkEmail,
+		'change-email': checkEmail,
+		'2fa': (
+			<>
+				<h1 className="text-h1">Check your 2FA app</h1>
+				<p className="mt-3 text-body-md text-muted-foreground">
+					Please enter your 2FA code to verify your identity
+				</p>
+			</>
+		),
+	}
 
 	const [form, fields] = useForm({
 		id: 'verify-form',
@@ -248,7 +280,7 @@ export default function VerifyRoute() {
 		},
 		defaultValue: {
 			code: searchParams.get(codeQueryParam) ?? '',
-			type: searchParams.get(typeQueryParam) ?? '',
+			type,
 			target: searchParams.get(targetQueryParam) ?? '',
 			redirectTo: searchParams.get(redirectToQueryParam) ?? '',
 		},
@@ -256,12 +288,7 @@ export default function VerifyRoute() {
 
 	return (
 		<div className="container flex flex-col justify-center pb-32 pt-20">
-			<div className="text-center">
-				<h1 className="text-h1">Check your email</h1>
-				<p className="mt-3 text-body-md text-muted-foreground">
-					We&apos;ve sent you a code to verify your email address.
-				</p>
-			</div>
+			<div className="text-center">{headings[type]}</div>
 
 			<Spacer size="xs" />
 
