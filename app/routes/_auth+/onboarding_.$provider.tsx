@@ -1,124 +1,153 @@
-import { useForm, getFormProps, getInputProps } from '@conform-to/react'
+import {
+	type SubmissionResult,
+	getFormProps,
+	getInputProps,
+	useForm,
+	type Intent,
+} from '@conform-to/react'
 import { getZodConstraint, parseWithZod } from '@conform-to/zod'
 import {
-	type ActionFunctionArgs,
-	type LoaderFunctionArgs,
 	json,
 	redirect,
+	type LoaderFunctionArgs,
+	type ActionFunctionArgs,
 	type MetaFunction,
 } from '@remix-run/node'
 import {
-	useActionData,
-	useSearchParams,
 	Form,
+	useActionData,
 	useLoaderData,
+	useSearchParams,
+	type Params,
 } from '@remix-run/react'
-import { AuthenticityTokenInput } from 'remix-utils/csrf/react'
-import { HoneypotInputs } from 'remix-utils/honeypot/react'
 import { safeRedirect } from 'remix-utils/safe-redirect'
 import { z } from 'zod'
-import { GeneralErrorBoundary } from '#app/components/error-boundary.tsx'
-import { Field, CheckboxField, ErrorList } from '#app/components/forms.tsx'
+import { CheckboxField, ErrorList, Field } from '#app/components/forms.tsx'
 import { Spacer } from '#app/components/spacer.tsx'
 import { StatusButton } from '#app/components/ui/status-button.tsx'
-import { requireAnonymous, sessionKey, signup } from '#app/utils/auth.server.ts'
-import { validateCSRF } from '#app/utils/csrf.server.ts'
-import { prisma } from '#app/utils/db.server.ts'
-import { checkHoneypot } from '#app/utils/honeypot.server.ts'
-import { invariant, useIsPending } from '#app/utils/misc.tsx'
 import {
-	EmailSchema,
-	NameSchema,
-	PasswordSchema,
-	UsernameSchema,
-} from '#app/utils/user-validation.ts'
+	authenticator,
+	requireAnonymous,
+	sessionKey,
+} from '#app/utils/auth.server.ts'
+import { ProviderNameSchema } from '#app/utils/connections.tsx'
+import { prisma } from '#app/utils/db.server.ts'
+import { invariant, useIsPending } from '#app/utils/misc.tsx'
+import { sessionStorage } from '#app/utils/session.server.ts'
+import { NameSchema, UsernameSchema } from '#app/utils/user-validation.ts'
 import { verifySessionStorage } from '#app/utils/verification.server.ts'
 import { type VerifyFunctionArgs } from './verify.tsx'
 
 export const onboardingEmailSessionKey = 'onboardingEmail'
+export const providerIdKey = 'providerId'
 
-const SignupFormSchema = z
-	.object({
-		username: UsernameSchema,
-		name: NameSchema,
-		email: EmailSchema,
-		password: PasswordSchema,
-		confirmPassword: PasswordSchema,
-		agreeToTermsOfServiceAndPrivacyPolicy: z.boolean({
-			required_error:
-				'You must agree to the terms of service and privacy policy',
-		}),
-		remember: z.boolean().optional(),
-		redirectTo: z.string().optional(),
-	})
-	.superRefine(({ confirmPassword, password }, ctx) => {
-		if (confirmPassword !== password) {
-			ctx.addIssue({
-				path: ['confirmPassword'],
-				code: 'custom',
-				message: 'The passwords must match',
-			})
-		}
-	})
+const SignupFormSchema = z.object({
+	imageUrl: z.string().optional(),
+	username: UsernameSchema,
+	name: NameSchema,
+	agreeToTermsOfServiceAndPrivacyPolicy: z.boolean({
+		required_error: 'You must agree to the terms of service and privacy policy',
+	}),
+	remember: z.boolean().optional(),
+	redirectTo: z.string().optional(),
+})
 
-async function requireOnboardingEmail(request: Request) {
+async function requireData({
+	request,
+	params,
+}: {
+	request: Request
+	params: Params
+}) {
 	await requireAnonymous(request)
-	const cookie = request.headers.get('cookie')
-	const verifySession = await verifySessionStorage.getSession(cookie)
+	const verifySession = await verifySessionStorage.getSession(
+		request.headers.get('cookie'),
+	)
 	const email = verifySession.get(onboardingEmailSessionKey)
-
-	if (typeof email !== 'string' || !email) {
+	const providerId = verifySession.get(providerIdKey)
+	const result = z
+		.object({
+			email: z.string(),
+			providerName: ProviderNameSchema,
+			providerId: z.string(),
+		})
+		.safeParse({ email, providerName: params.provider, providerId })
+	if (result.success) {
+		return result.data
+	} else {
+		console.error(result.error)
 		throw redirect('/signup')
 	}
-
-	return email
 }
 
-export async function loader({ request }: LoaderFunctionArgs) {
-	await requireAnonymous(request)
-	const email = await requireOnboardingEmail(request)
+export async function loader({ request, params }: LoaderFunctionArgs) {
+	const { email } = await requireData({ request, params })
+	const cookieSession = await sessionStorage.getSession(
+		request.headers.get('cookie'),
+	)
 
-	return json({ email })
+	const formError = cookieSession.get(authenticator.sessionErrorKey)
+
+	return json({
+		email,
+		status: 'idle',
+		submission: {
+			intent: '' as unknown as Intent,
+			payload: {} as Record<string, unknown>,
+			error: {
+				'': typeof formError === 'string' ? [formError] : [],
+			},
+		} as SubmissionResult<string[]>,
+	})
 }
 
-export async function action({ request }: ActionFunctionArgs) {
-	const email = await requireOnboardingEmail(request)
+export async function action({ request, params }: ActionFunctionArgs) {
+	const { email, providerId, providerName } = await requireData({
+		request,
+		params,
+	})
 	const formData = await request.formData()
-	await validateCSRF(formData, request.headers)
-	checkHoneypot(formData)
+	const verifySession = await verifySessionStorage.getSession(
+		request.headers.get('cookie'),
+	)
 
 	const submission = await parseWithZod(formData, {
 		schema: SignupFormSchema.superRefine(async (data, ctx) => {
-			const existingUser = await prisma.user.findFirst({
-				select: { id: true },
+			const existingUser = await prisma.user.findUnique({
 				where: { username: data.username },
+				select: { id: true },
 			})
-
 			if (existingUser) {
 				ctx.addIssue({
 					path: ['username'],
 					code: z.ZodIssueCode.custom,
-					message: 'User already exists with this username',
+					message: 'A user already exists with this username',
 				})
 				return
 			}
 		}).transform(async data => {
-			const session = await signup({ ...data, email })
+			console.log('TODO: implement third party onboarding', {
+				...data,
+				email,
+				providerId,
+				providerName,
+			})
+			const session = { id: 'TODO', expirationDate: new Date() }
 			return { ...data, session }
 		}),
 		async: true,
 	})
 
 	if (submission.status !== 'success') {
-		return json(submission.reply())
+		return json(submission.reply(), { status: 400 })
 	}
 
 	const { session, remember, redirectTo } = submission.value
-	const cookie = request.headers.get('cookie')
-	const cookieSession = await sessionStorage.getSession(cookie)
-	cookieSession.set(sessionKey, session.id)
-	const verifySession = await verifySessionStorage.getSession(cookie)
 
+	const cookieSession = await sessionStorage.getSession(
+		request.headers.get('cookie'),
+	)
+	cookieSession.set(sessionKey, session.id)
 	const headers = new Headers()
 	headers.append(
 		'set-cookie',
@@ -140,12 +169,12 @@ export async function handleVerification({
 }: VerifyFunctionArgs) {
 	invariant(
 		submission.status === 'success',
-		'submission.value should be here by now',
+		'submission.value should be defined by now',
 	)
-	const cookie = request.headers.get('cookie')
-	const verifySession = await verifySessionStorage.getSession(cookie)
+	const verifySession = await verifySessionStorage.getSession(
+		request.headers.get('cookie'),
+	)
 	verifySession.set(onboardingEmailSessionKey, submission.value.target)
-
 	return redirect('/onboarding', {
 		headers: {
 			'set-cookie': await verifySessionStorage.commitSession(verifySession),
@@ -157,7 +186,7 @@ export const meta: MetaFunction = () => {
 	return [{ title: 'Setup Epic Notes Account' }]
 }
 
-export default function OnboardingRoute() {
+export default function SignupRoute() {
 	const data = useLoaderData<typeof loader>()
 	const actionData = useActionData<typeof action>()
 	const isPending = useIsPending()
@@ -165,10 +194,9 @@ export default function OnboardingRoute() {
 	const redirectTo = searchParams.get('redirectTo')
 
 	const [form, fields] = useForm({
-		id: 'onboarding-form',
-		defaultValue: { redirectTo },
+		id: 'signup-form',
 		constraint: getZodConstraint(SignupFormSchema),
-		lastResult: actionData,
+		lastResult: actionData ?? data.submission,
 		onValidate({ formData }) {
 			return parseWithZod(formData, { schema: SignupFormSchema })
 		},
@@ -187,11 +215,22 @@ export default function OnboardingRoute() {
 				<Spacer size="xs" />
 				<Form
 					method="POST"
-					{...getFormProps(form)}
 					className="mx-auto min-w-[368px] max-w-sm"
+					{...getFormProps(form)}
 				>
-					<AuthenticityTokenInput />
-					<HoneypotInputs />
+					{fields.imageUrl.initialValue ? (
+						<div className="mb-4 flex flex-col items-center justify-center gap-4">
+							<img
+								src={fields.imageUrl.initialValue}
+								alt="Profile"
+								className="h-24 w-24 rounded-full"
+							/>
+							<p className="text-body-sm text-muted-foreground">
+								You can change your photo later
+							</p>
+							<input {...getInputProps(fields.imageUrl, { type: 'hidden' })} />
+						</div>
+					) : null}
 					<Field
 						labelProps={{ htmlFor: fields.username.id, children: 'Username' }}
 						inputProps={{
@@ -209,26 +248,6 @@ export default function OnboardingRoute() {
 						}}
 						errors={fields.name.errors}
 					/>
-					<Field
-						labelProps={{ htmlFor: fields.password.id, children: 'Password' }}
-						inputProps={{
-							...getInputProps(fields.password, { type: 'password' }),
-							autoComplete: 'new-password',
-						}}
-						errors={fields.password.errors}
-					/>
-
-					<Field
-						labelProps={{
-							htmlFor: fields.confirmPassword.id,
-							children: 'Confirm Password',
-						}}
-						inputProps={{
-							...getInputProps(fields.confirmPassword, { type: 'password' }),
-							autoComplete: 'new-password',
-						}}
-						errors={fields.confirmPassword.errors}
-					/>
 
 					<CheckboxField
 						labelProps={{
@@ -236,26 +255,24 @@ export default function OnboardingRoute() {
 							children:
 								'Do you agree to our Terms of Service and Privacy Policy?',
 						}}
-						buttonProps={{
-							...getInputProps(fields.agreeToTermsOfServiceAndPrivacyPolicy, {
-								type: 'checkbox',
-							}),
-						}}
+						buttonProps={getInputProps(
+							fields.agreeToTermsOfServiceAndPrivacyPolicy,
+							{ type: 'checkbox' },
+						)}
 						errors={fields.agreeToTermsOfServiceAndPrivacyPolicy.errors}
 					/>
-
 					<CheckboxField
 						labelProps={{
 							htmlFor: fields.remember.id,
 							children: 'Remember me',
 						}}
-						buttonProps={getInputProps(fields.remember, {
-							type: 'checkbox',
-						})}
+						buttonProps={getInputProps(fields.remember, { type: 'checkbox' })}
 						errors={fields.remember.errors}
 					/>
 
-					<input {...getInputProps(fields.redirectTo, { type: 'hidden' })} />
+					{redirectTo ? (
+						<input type="hidden" name="redirectTo" value={redirectTo} />
+					) : null}
 
 					<ErrorList errors={form.errors} id={form.errorId} />
 
@@ -273,8 +290,4 @@ export default function OnboardingRoute() {
 			</div>
 		</div>
 	)
-}
-
-export function ErrorBoundary() {
-	return <GeneralErrorBoundary />
 }

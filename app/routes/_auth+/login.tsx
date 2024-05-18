@@ -162,10 +162,6 @@ export async function action({ request }: ActionFunctionArgs) {
 		return json(submission.reply())
 	}
 
-	if (!submission.value?.session) {
-		return json({ status: 'error', submission } as const, { status: 400 })
-	}
-
 	const { session, remember, redirectTo } = submission.value
 
 	if (await shouldRequestTwoFA({ request, userId: session.userId })) {

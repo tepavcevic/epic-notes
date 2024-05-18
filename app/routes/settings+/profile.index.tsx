@@ -146,6 +146,11 @@ export default function EditUserProfile() {
 					</Link>
 				</div>
 				<div>
+					<Link to="connections">
+						<Icon name="link-2">Manage connections</Icon>
+					</Link>
+				</div>
+				<div>
 					<a
 						download="my-epic-notes-data.json"
 						href="/resources/download-user-data"
@@ -190,9 +195,6 @@ async function profileUpdateAction({ userId, formData }: ProfileActionArgs) {
 	})
 	if (submission.status !== 'success') {
 		return json(submission.reply())
-	}
-	if (!submission.value) {
-		return json({ status: 'error', submission } as const, { status: 400 })
 	}
 
 	const data = submission.value
