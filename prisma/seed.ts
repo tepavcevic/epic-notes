@@ -3,6 +3,7 @@ import { faker } from '@faker-js/faker'
 import { PrismaClient } from '@prisma/client'
 import { promiseHash } from 'remix-utils/promise'
 import { createPassword, createUser } from '#tests/db-utils.ts'
+import { insertGitHubUser } from '#tests/mocks/github.ts'
 
 const prisma = new PrismaClient()
 
@@ -186,6 +187,8 @@ async function seed() {
 		}),
 	})
 
+	const githubUser = await insertGitHubUser('MOCK_GITHUB_CLIENT_KODY')
+
 	await prisma.user.create({
 		data: {
 			email: 'kody@example.dev',
@@ -194,6 +197,9 @@ async function seed() {
 			image: { create: kodyImages.kodyUser },
 			password: {
 				create: createPassword('password'),
+			},
+			connections: {
+				create: { providerId: githubUser.profile.id, providerName: 'github' },
 			},
 			roles: { connect: [{ name: 'admin' }, { name: 'user' }] },
 			notes: {

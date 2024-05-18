@@ -16,11 +16,12 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  image    UserImage?
-  password Password?
-  notes    Note[]
-  roles    Role[]
-  sessions Session[]
+  image       UserImage?
+  password    Password?
+  notes       Note[]
+  roles       Role[]
+  sessions    Session[]
+  connections Connection[]
 }
 
 model Note {
@@ -135,4 +136,19 @@ model Verification {
   expiresAt DateTime?
 
   @@unique([target, type])
+}
+
+model Connection {
+  id String @id @default(cuid())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  providerName String
+  providerId   String
+  user         User   @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  userId       String
+
+  @@unique([providerId, providerName])
+  @@index([userId])
 }
