@@ -1,9 +1,26 @@
 node_modules
+.DS_store
 .vscode
 
 /.cache
 /build
 /public/build
+/server-build
 .env
-*.db
-*.sql
+tsconfig.tsbuildinfo
+*.ignored.*
+
+/prisma/data.db
+/prisma/data.db-journal
+/tests/prisma
+
+/test-results/
+/playwright-report/
+/playwright/.cache/
+/tests/fixtures/email/
+/coverage
+
+/other/cache.db
+
+# Easy way to create temporary files/folders that won't accidentally be added to git
+*.local.*
