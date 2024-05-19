@@ -22,9 +22,11 @@ export const providerIcons: Record<ProviderName, ReactNode> = {
 export function ProviderConnectionForm({
 	type,
 	providerName,
+	redirectTo,
 }: {
 	type: 'Connect' | 'Login' | 'Signup'
 	providerName: ProviderName
+	redirectTo?: string | null
 }) {
 	const label = providerLabels[providerName]
 	const formAction = `/auth/${providerName}`
@@ -36,6 +38,9 @@ export function ProviderConnectionForm({
 			action={formAction}
 			method="POST"
 		>
+			{redirectTo ? (
+				<input type="hidden" name="redirectTo" value={redirectTo} />
+			) : null}
 			<StatusButton
 				type="submit"
 				className="w-full"

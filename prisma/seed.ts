@@ -200,9 +200,9 @@ async function seed() {
 			password: {
 				create: createPassword('password'),
 			},
-			// connections: {
-			// 	create: { providerId: githubUser.profile.id, providerName: 'github' },
-			// },
+			connections: {
+				create: { providerId: githubUser.profile.id, providerName: 'github' },
+			},
 			roles: { connect: [{ name: 'admin' }, { name: 'user' }] },
 			notes: {
 				create: [
