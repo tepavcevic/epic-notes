@@ -50,6 +50,7 @@ function createGitHubUser(
 			primary: false,
 			visibility: null,
 		},
+		primaryEmail,
 	]
 
 	code ??= faker.string.uuid()

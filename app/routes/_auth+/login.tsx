@@ -19,7 +19,11 @@ import { ProviderConnectionForm } from '#app/utils/connections.tsx'
 import { validateCSRF } from '#app/utils/csrf.server.ts'
 import { prisma } from '#app/utils/db.server.ts'
 import { checkHoneypot } from '#app/utils/honeypot.server.ts'
-import { invariant, useIsPending } from '#app/utils/misc.tsx'
+import {
+	combineResponseInits,
+	invariant,
+	useIsPending,
+} from '#app/utils/misc.tsx'
 import { sessionStorage } from '#app/utils/session.server.ts'
 import { redirectWithToast } from '#app/utils/toast.server.ts'
 import { PasswordSchema, UsernameSchema } from '#app/utils/user-validation.ts'
@@ -31,17 +35,20 @@ const verifiedTimeKey = 'verified-time'
 const unverifiedSessionIdKey = 'unverified-session-id'
 const rememberKey = 'remember-me'
 
-export async function handleNewSession({
-	request,
-	session,
-	remember = false,
-	redirectTo,
-}: {
-	request: Request
-	session: { id: string; expirationDate: Date; userId: string }
-	remember?: boolean
-	redirectTo?: string
-}) {
+export async function handleNewSession(
+	{
+		request,
+		session,
+		remember = false,
+		redirectTo,
+	}: {
+		request: Request
+		session: { id: string; expirationDate: Date; userId: string }
+		remember?: boolean
+		redirectTo?: string
+	},
+	responseInit?: ResponseInit,
+) {
 	if (await shouldRequestTwoFA({ request, userId: session.userId })) {
 		// not passing any cookie to getSession so we can create a new verification flow
 		const verifySession = await verifySessionStorage.getSession()
@@ -53,23 +60,36 @@ export async function handleNewSession({
 			target: session.userId,
 			redirectTo,
 		})
-		return redirect(redirectUrl.toString(), {
-			headers: {
-				'set-cookie': await verifySessionStorage.commitSession(verifySession),
-			},
-		})
+		return redirect(
+			redirectUrl.toString(),
+			combineResponseInits(
+				{
+					headers: {
+						'set-cookie':
+							await verifySessionStorage.commitSession(verifySession),
+					},
+				},
+				responseInit,
+			),
+		)
 	} else {
 		const cookie = request.headers.get('cookie')
 		const cookieSession = await sessionStorage.getSession(cookie)
 		cookieSession.set(sessionKey, session.id)
 
-		return redirect(safeRedirect(redirectTo), {
-			headers: {
-				'set-cookie': await sessionStorage.commitSession(cookieSession, {
-					expires: remember ? session.expirationDate : undefined,
-				}),
-			},
-		})
+		return redirect(
+			safeRedirect(redirectTo),
+			combineResponseInits(
+				{
+					headers: {
+						'set-cookie': await sessionStorage.commitSession(cookieSession, {
+							expires: remember ? session.expirationDate : undefined,
+						}),
+					},
+				},
+				responseInit,
+			),
+		)
 	}
 }
 

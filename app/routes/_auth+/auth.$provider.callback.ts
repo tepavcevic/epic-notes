@@ -6,7 +6,10 @@ import {
 } from '#app/utils/auth.server.ts'
 import { ProviderNameSchema, providerLabels } from '#app/utils/connections.tsx'
 import { prisma } from '#app/utils/db.server.ts'
-import { redirectWithToast } from '#app/utils/toast.server.ts'
+import {
+	createToastHeaders,
+	redirectWithToast,
+} from '#app/utils/toast.server.ts'
 import { verifySessionStorage } from '#app/utils/verification.server.ts'
 import { handleNewSession } from './login.tsx'
 import {
@@ -52,16 +55,50 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 		})
 	}
 
+	if (userId) {
+		await prisma.connection.create({
+			data: { providerName, userId, providerId: profile.id },
+		})
+
+		throw await redirectWithToast('/settings/profile/connections', {
+			type: 'success',
+			title: 'Connected',
+			description: `Your "${profile.username}" ${label} account is connected.`,
+		})
+	}
+
 	if (existingConnection) {
-		const session = await prisma.session.create({
-			select: { id: true, userId: true, expirationDate: true },
+		return makeSession({ request, userId: existingConnection.userId })
+	}
+
+	// if the email matches then connect their accounts
+	const user = await prisma.user.findUnique({
+		select: { id: true },
+		where: { email: profile.email },
+	})
+	if (user) {
+		await prisma.connection.create({
 			data: {
-				userId: existingConnection.userId,
-				expirationDate: getSessionExpirationDate(),
+				userId: user.id,
+				providerName,
+				providerId: profile.id,
 			},
 		})
 
-		return handleNewSession({ request, session, remember: true })
+		return makeSession(
+			{
+				request,
+				userId: user.id,
+				redirectTo: '/settings/profile/connections',
+			},
+			{
+				headers: await createToastHeaders({
+					type: 'success',
+					title: 'Connected',
+					description: `Your "${profile.username}" ${label} account has been connected.`,
+				}),
+			},
+		)
 	}
 
 	const cookie = request.headers.get('cookie')
@@ -82,4 +119,32 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 			'set-cookie': await verifySessionStorage.commitSession(verifySession),
 		},
 	})
+}
+
+async function makeSession(
+	{
+		request,
+		userId,
+		redirectTo,
+	}: {
+		request: Request
+		userId: string
+		redirectTo?: string
+	},
+	responseInit?: ResponseInit,
+) {
+	redirectTo ??= '/'
+
+	const session = await prisma.session.create({
+		select: { id: true, userId: true, expirationDate: true },
+		data: {
+			userId: userId,
+			expirationDate: getSessionExpirationDate(),
+		},
+	})
+
+	return handleNewSession(
+		{ request, session, redirectTo, remember: true },
+		responseInit,
+	)
 }

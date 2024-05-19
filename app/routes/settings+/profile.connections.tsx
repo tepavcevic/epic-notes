@@ -172,6 +172,7 @@ function Connection({
 			</Icon>
 			{canDelete ? (
 				<deleteFetcher.Form method="POST">
+					<input type="hidden" name="connectionId" value={connection.id} />
 					<TooltipProvider>
 						<Tooltip>
 							<TooltipTrigger asChild>
