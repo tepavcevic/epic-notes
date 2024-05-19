@@ -16,6 +16,7 @@ import { GeneralErrorBoundary } from '#app/components/error-boundary.tsx'
 import { ErrorList, Field } from '#app/components/forms.tsx'
 import { StatusButton } from '#app/components/ui/status-button.tsx'
 import { requireAnonymous } from '#app/utils/auth.server.ts'
+import { ProviderConnectionForm } from '#app/utils/connections.tsx'
 import { validateCSRF } from '#app/utils/csrf.server.ts'
 import { prisma } from '#app/utils/db.server.ts'
 import { sendEmail } from '#app/utils/email.server.ts'
@@ -60,9 +61,6 @@ export async function action({ request }: ActionFunctionArgs) {
 
 	if (submission.status !== 'success') {
 		return json(submission.reply())
-	}
-	if (!submission.value?.email) {
-		return json({ status: 'error', submission } as const, { status: 400 })
 	}
 
 	const { email, redirectTo: postVerificationRedirectTo } = submission.value
@@ -125,8 +123,6 @@ export default function SignupRoute() {
 	const [searchParams] = useSearchParams()
 	const redirectTo = searchParams.get('redirectTo')
 
-	console.log(actionData)
-
 	const [form, fields] = useForm({
 		id: 'signup-form',
 		defaultValue: { redirectTo },
@@ -178,6 +174,9 @@ export default function SignupRoute() {
 						Create an account
 					</StatusButton>
 				</Form>
+				<div className="mt-5 flex flex-col gap-5 border-b-2 border-t-2 border-border py-3">
+					<ProviderConnectionForm providerName="github" type="Signup" />
+				</div>
 			</div>
 		</div>
 	)

@@ -31,6 +31,48 @@ const verifiedTimeKey = 'verified-time'
 const unverifiedSessionIdKey = 'unverified-session-id'
 const rememberKey = 'remember-me'
 
+export async function handleNewSession({
+	request,
+	session,
+	remember = false,
+	redirectTo,
+}: {
+	request: Request
+	session: { id: string; expirationDate: Date; userId: string }
+	remember?: boolean
+	redirectTo?: string
+}) {
+	if (await shouldRequestTwoFA({ request, userId: session.userId })) {
+		// not passing any cookie to getSession so we can create a new verification flow
+		const verifySession = await verifySessionStorage.getSession()
+		verifySession.set(unverifiedSessionIdKey, session.id)
+		verifySession.set(rememberKey, remember)
+		const redirectUrl = getRedirectToUrl({
+			request,
+			type: twoFAVerificationType,
+			target: session.userId,
+			redirectTo,
+		})
+		return redirect(redirectUrl.toString(), {
+			headers: {
+				'set-cookie': await verifySessionStorage.commitSession(verifySession),
+			},
+		})
+	} else {
+		const cookie = request.headers.get('cookie')
+		const cookieSession = await sessionStorage.getSession(cookie)
+		cookieSession.set(sessionKey, session.id)
+
+		return redirect(safeRedirect(redirectTo), {
+			headers: {
+				'set-cookie': await sessionStorage.commitSession(cookieSession, {
+					expires: remember ? session.expirationDate : undefined,
+				}),
+			},
+		})
+	}
+}
+
 export async function handleVerification({
 	request,
 	submission,
@@ -164,35 +206,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
 	const { session, remember, redirectTo } = submission.value
 
-	if (await shouldRequestTwoFA({ request, userId: session.userId })) {
-		// not passing any cookie to getSession so we can create a new verification flow
-		const verifySession = await verifySessionStorage.getSession()
-		verifySession.set(unverifiedSessionIdKey, session.id)
-		verifySession.set(rememberKey, remember)
-		const redirectUrl = getRedirectToUrl({
-			request,
-			type: twoFAVerificationType,
-			target: session.userId,
-			redirectTo,
-		})
-		return redirect(redirectUrl.toString(), {
-			headers: {
-				'set-cookie': await verifySessionStorage.commitSession(verifySession),
-			},
-		})
-	} else {
-		const cookie = request.headers.get('cookie')
-		const cookieSession = await sessionStorage.getSession(cookie)
-		cookieSession.set(sessionKey, session.id)
-
-		return redirect(safeRedirect(redirectTo), {
-			headers: {
-				'set-cookie': await sessionStorage.commitSession(cookieSession, {
-					expires: remember ? session.expirationDate : undefined,
-				}),
-			},
-		})
-	}
+	return handleNewSession({ request, session, remember, redirectTo })
 }
 
 export default function LoginPage() {

@@ -1,8 +1,19 @@
-import { type LoaderFunctionArgs } from '@remix-run/node'
-import { authenticator, getUserId } from '#app/utils/auth.server.ts'
+import { redirect, type LoaderFunctionArgs } from '@remix-run/node'
+import {
+	authenticator,
+	getSessionExpirationDate,
+	getUserId,
+} from '#app/utils/auth.server.ts'
 import { ProviderNameSchema, providerLabels } from '#app/utils/connections.tsx'
 import { prisma } from '#app/utils/db.server.ts'
 import { redirectWithToast } from '#app/utils/toast.server.ts'
+import { verifySessionStorage } from '#app/utils/verification.server.ts'
+import { handleNewSession } from './login.tsx'
+import {
+	onboardingEmailSessionKey,
+	prefilledProfileKey,
+	providerIdKey,
+} from './onboarding_.$provider.tsx'
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
 	const providerName = ProviderNameSchema.parse(params.provider)
@@ -22,8 +33,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 			})
 		})
 
-	console.log(profile)
-
 	const existingConnection = await prisma.connection.findUnique({
 		select: { userId: true },
 		where: {
@@ -31,8 +40,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 		},
 	})
 	const userId = await getUserId(request)
-
-	console.log({ existingConnection, userId, providerName })
 
 	if (existingConnection && userId) {
 		throw await redirectWithToast('/settings/profile/connections', {
@@ -45,9 +52,34 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 		})
 	}
 
-	throw await redirectWithToast('/login', {
-		title: 'Auth success',
-		description: 'success',
-		type: 'success',
+	if (existingConnection) {
+		const session = await prisma.session.create({
+			select: { id: true, userId: true, expirationDate: true },
+			data: {
+				userId: existingConnection.userId,
+				expirationDate: getSessionExpirationDate(),
+			},
+		})
+
+		return handleNewSession({ request, session, remember: true })
+	}
+
+	const cookie = request.headers.get('cookie')
+	const verifySession = await verifySessionStorage.getSession(cookie)
+	verifySession.set(onboardingEmailSessionKey, profile.email)
+	verifySession.set(prefilledProfileKey, {
+		...profile,
+		username: profile.username
+			?.replaceAll(/[^a-zA-Z0-9]/gi, '_')
+			.toLowerCase()
+			.slice(0, 20)
+			.padEnd(3, '_'),
+	})
+	verifySession.set(providerIdKey, profile.id)
+
+	return redirect(`/onboarding/${providerName}`, {
+		headers: {
+			'set-cookie': await verifySessionStorage.commitSession(verifySession),
+		},
 	})
 }

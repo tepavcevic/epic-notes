@@ -29,6 +29,7 @@ import {
 	authenticator,
 	requireAnonymous,
 	sessionKey,
+	signupWithConnection,
 } from '#app/utils/auth.server.ts'
 import { ProviderNameSchema } from '#app/utils/connections.tsx'
 import { prisma } from '#app/utils/db.server.ts'
@@ -40,6 +41,7 @@ import { type VerifyFunctionArgs } from './verify.tsx'
 
 export const onboardingEmailSessionKey = 'onboardingEmail'
 export const providerIdKey = 'providerId'
+export const prefilledProfileKey = 'prefilledProfile'
 
 const SignupFormSchema = z.object({
 	imageUrl: z.string().optional(),
@@ -65,6 +67,7 @@ async function requireData({
 	)
 	const email = verifySession.get(onboardingEmailSessionKey)
 	const providerId = verifySession.get(providerIdKey)
+
 	const result = z
 		.object({
 			email: z.string(),
@@ -82,9 +85,10 @@ async function requireData({
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
 	const { email } = await requireData({ request, params })
-	const cookieSession = await sessionStorage.getSession(
-		request.headers.get('cookie'),
-	)
+	const cookie = request.headers.get('cookie')
+	const cookieSession = await sessionStorage.getSession(cookie)
+	const verifySession = verifySessionStorage.getSession(cookie)
+	const prefilledProfile = (await verifySession).get(prefilledProfileKey)
 
 	const formError = cookieSession.get(authenticator.sessionErrorKey)
 
@@ -93,7 +97,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 		status: 'idle',
 		submission: {
 			intent: '' as unknown as Intent,
-			payload: {} as Record<string, unknown>,
+			initialValue: (prefilledProfile ?? {}) as Record<string, unknown>,
 			error: {
 				'': typeof formError === 'string' ? [formError] : [],
 			},
@@ -126,13 +130,12 @@ export async function action({ request, params }: ActionFunctionArgs) {
 				return
 			}
 		}).transform(async data => {
-			console.log('TODO: implement third party onboarding', {
+			const session = await signupWithConnection({
 				...data,
 				email,
 				providerId,
 				providerName,
 			})
-			const session = { id: 'TODO', expirationDate: new Date() }
 			return { ...data, session }
 		}),
 		async: true,
@@ -196,11 +199,16 @@ export default function SignupRoute() {
 	const [form, fields] = useForm({
 		id: 'signup-form',
 		constraint: getZodConstraint(SignupFormSchema),
-		lastResult: actionData ?? data.submission,
+		lastResult: actionData,
 		onValidate({ formData }) {
 			return parseWithZod(formData, { schema: SignupFormSchema })
 		},
 		shouldRevalidate: 'onBlur',
+		defaultValue: {
+			username: data.submission.initialValue?.username as string,
+			name: data.submission.initialValue?.name as string,
+			imageUrl: data.submission.initialValue?.imageUrl as string,
+		},
 	})
 
 	return (
