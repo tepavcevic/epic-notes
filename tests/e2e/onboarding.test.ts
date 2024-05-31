@@ -1,5 +1,6 @@
 import { faker } from '@faker-js/faker'
 import { prisma } from '#app/utils/db.server.ts'
+import { invariant } from '#app/utils/misc.tsx'
 import { createUser } from '#tests/db-utils.ts'
 import { test as base, waitFor } from '#tests/playwright-utils.ts'
 
@@ -59,4 +60,44 @@ test('onboarding with link', async ({ page, getOnboardingData }) => {
 	})) as any
 
 	expect(email.to).toBe(onboardingData.email.toLowerCase())
+	expect(email.from).toBe('hello@app.dev')
+	expect(email.subject).toMatch(/welcome/i)
+	const onboardingUrl = extractUrl(email.text)
+	invariant(onboardingUrl, 'onboarding URL not found')
+	await page.goto(onboardingUrl)
+
+	await expect(page).toHaveURL('/onboarding')
+	await page
+		.getByRole('textbox', { name: /^username/i })
+		.fill(onboardingData.username)
+
+	await page.getByRole('textbox', { name: /^name/i }).fill(onboardingData.name)
+	await page.getByLabel(/^password/i).fill(onboardingData.password)
+	await page.getByLabel(/^confirm password/i).fill(onboardingData.password)
+	await page.getByLabel(/terms/i).check()
+	await page.getByLabel(/remember me/i).check()
+	await page.getByRole('button', { name: /Create an account/i }).click()
+
+	await expect(page).toHaveURL('/')
+
+	await page.getByRole('link', { name: onboardingData.name }).click()
+
+	await expect(page).toHaveURL(`/users/${onboardingData.username}`)
+
+	await page.getByRole('button', { name: /logout/i }).click()
+	await expect(page).toHaveURL('/')
+})
+
+test('login as existing user', async ({ page, insertNewUser }) => {
+	const password = faker.internet.password()
+	const user = await insertNewUser({ password })
+	invariant(user.name, 'user name not found')
+
+	await page.goto('login')
+	await page.getByRole('textbox', { name: /username/i }).fill(user.username)
+	await page.getByLabel(/^password$/i).fill(password)
+	await page.getByRole('button', { name: /log in/i }).click()
+	await expect(page).toHaveURL('/')
+
+	await expect(page.getByRole('link', { name: user.name })).toBeVisible()
 })
