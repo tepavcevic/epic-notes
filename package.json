@@ -96,5 +96,12 @@
   },
   "prisma": {
     "seed": "npx tsx ./prisma/seed.ts"
-  }
+  },
+  "eslintIgnore": [
+    "/node_modules",
+    "/build",
+    "/public/build",
+    "/playwright-report",
+    "/server-build"
+  ]
 }
