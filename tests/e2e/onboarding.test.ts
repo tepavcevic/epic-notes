@@ -2,6 +2,7 @@ import { faker } from '@faker-js/faker'
 import { prisma } from '#app/utils/db.server.ts'
 import { invariant } from '#app/utils/misc.tsx'
 import { createUser, test as base, waitFor } from '#tests/playwright-utils.ts'
+import { requireEmail } from '#tests/mocks/resend.ts'
 
 const URL_REGEX = /(?<url>https?:\/\/[^\s$.?#].[^\s]*)/
 function extractUrl(text: string) {
@@ -53,10 +54,9 @@ test('onboarding with link', async ({ page, getOnboardingData }) => {
 	).toBeVisible()
 	await expect(page.getByText(/check your email/i)).toBeVisible()
 
-	// we'll fix this soon.
-	const email = (await waitFor(() => {
-		throw new Error('Not yet implemented')
-	})) as any
+	const email = await waitFor(() =>
+		requireEmail(onboardingData.email.toLowerCase()),
+	)
 
 	expect(email.to).toBe(onboardingData.email.toLowerCase())
 	expect(email.from).toBe('hello@epicstack.dev')

@@ -19,6 +19,13 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const emailFixturesDirPath = path.join(__dirname, '..', 'fixtures', 'email')
 await fsExtra.ensureDir(emailFixturesDirPath)
 
+export async function requireEmail(recipient: string) {
+	const email = await fsExtra.readJson(
+		path.join(emailFixturesDirPath, `${recipient}.json`),
+	)
+	return EmailSchema.parse(email)
+}
+
 export const handlers: Array<HttpHandler> = [
 	http.post(`https://api.resend.com/emails`, async ({ request }) => {
 		const email = EmailSchema.parse(await request.json())
