@@ -5,11 +5,20 @@
   "type": "module",
   "scripts": {
     "build": "run-s build:*",
+    "build:icons": "tsx ./other/build-icons.ts",
     "build:remix": "remix build --sourcemap",
     "build:server": "tsx ./other/build-server.ts",
-    "dev": "remix dev -c \"node ./server/dev-server.js\" --manual",
-    "test": "playwright test",
+    "predev": "npm run build:icons --silent",
+    "dev": "remix dev --manual -c \"node ./server/dev-server.js\"",
+    "test": "vitest",
+    "coverage": "vitest run --coverage",
+    "test:e2e": "npm run test:e2e:dev --silent",
+    "test:e2e:dev": "playwright test --ui",
+    "pretest:e2e:run": "npm run build",
+    "test:e2e:run": "cross-env CI=true playwright test",
+    "test:e2e:install": "npx playwright install --with-deps chromium",
     "start": "cross-env NODE_ENV=production node .",
+    "start:mocks": "cross-env NODE_ENV=production MOCKS=true tsx .",
     "lint": "eslint .",
     "typecheck": "tsc"
   },
@@ -58,6 +67,7 @@
     "@prisma/client": "^5.14.0",
     "@remix-run/dev": "^2.8.0",
     "@remix-run/eslint-config": "^2.8.1",
+    "@sly-cli/sly": "^1.10.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/compression": "^1.7.5",
     "@types/express": "^4.17.21",
@@ -80,6 +90,7 @@
     "eslint-plugin-react-hooks": "^4.6.0",
     "i": "^0.3.7",
     "msw": "^2.3.0",
+    "node-html-parser": "^6.1.13",
     "npm": "^10.8.0",
     "prettier": "^3.2.5",
     "prettier-plugin-sql": "^0.18.0",
@@ -89,7 +100,9 @@
     "tailwindcss": "^3.4.0",
     "tailwindcss-animate": "^1.0.7",
     "tsx": "^4.7.1",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "vite": "^5.2.12",
+    "vite-tsconfig-paths": "^4.3.2"
   },
   "engines": {
     "node": ">=18.0.0"
