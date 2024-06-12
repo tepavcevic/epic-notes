@@ -48,9 +48,9 @@ test('onboarding with link', async ({ page, getOnboardingData }) => {
 	await expect(page).toHaveURL(`/signup`)
 
 	await page.getByRole('textbox', { name: /email/i }).fill(onboardingData.email)
-	await page.getByRole('button', { name: /submit/i }).click()
+	await page.getByRole('button', { name: /create an account/i }).click()
 	await expect(
-		page.getByRole('button', { name: /submit/i, disabled: true }),
+		page.getByRole('button', { name: /create an account/i, disabled: true }),
 	).toBeVisible()
 	await expect(page.getByText(/check your email/i)).toBeVisible()
 
@@ -59,7 +59,7 @@ test('onboarding with link', async ({ page, getOnboardingData }) => {
 	)
 
 	expect(email.to).toBe(onboardingData.email.toLowerCase())
-	expect(email.from).toBe('hello@epicstack.dev')
+	expect(email.from).toBe('hello@app.dev')
 	expect(email.subject).toMatch(/welcome/i)
 	const onboardingUrl = extractUrl(email.text)
 	invariant(onboardingUrl, 'Onboarding URL not found')
