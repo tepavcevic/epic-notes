@@ -1,6 +1,9 @@
+import 'dotenv/config'
+import 'source-map-support/register.js'
 import { installGlobals } from '@remix-run/node'
 import chalk from 'chalk'
 import closeWithGrace from 'close-with-grace'
+
 installGlobals()
 
 if (
@@ -10,10 +13,10 @@ if (
 	process.env.TESTING = 'true'
 }
 
-closeWithGrace(async ({ error }) => {
-	if (error) {
-		console.error(chalk.red(error))
-		console.error(chalk.red(error.stack))
+closeWithGrace(async ({ err }) => {
+	if (err) {
+		console.error(chalk.red(err))
+		console.error(chalk.red(err.stack))
 		process.exit(1)
 	}
 })
