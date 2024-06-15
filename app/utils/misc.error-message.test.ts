@@ -1,5 +1,6 @@
 import { faker } from '@faker-js/faker'
-import { test, expect, vi } from 'vitest'
+import { expect, test } from 'vitest'
+import { consoleError } from '#tests/setup/setup-test-env.ts'
 import { getErrorMessage } from './misc.tsx'
 
 test('Error object returns message.', () => {
@@ -13,15 +14,13 @@ test('Error string returns message.', () => {
 	expect(getErrorMessage(message)).toBe(message)
 })
 
+consoleError.mockImplementation(() => {})
 test('Random array returns Unknown Error.', () => {
 	const error = ['Error']
-	const consoleError = vi.spyOn(console, 'error')
-	consoleError.mockImplementation(() => {})
 	expect(getErrorMessage(error)).toBe('Unknown Error')
 	expect(consoleError).toHaveBeenCalledTimes(1)
 	expect(consoleError).toHaveBeenCalledWith(
 		'Unable to get error message for error',
 		error,
 	)
-	consoleError.mockRestore()
 })
