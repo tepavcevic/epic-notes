@@ -14,8 +14,8 @@ test('Error string returns message.', () => {
 	expect(getErrorMessage(message)).toBe(message)
 })
 
-consoleError.mockImplementation(() => {})
 test('Random array returns Unknown Error.', () => {
+	consoleError.mockImplementation(() => {})
 	const error = ['Error']
 	expect(getErrorMessage(error)).toBe('Unknown Error')
 	expect(consoleError).toHaveBeenCalledTimes(1)
