@@ -1,6 +1,8 @@
 import 'dotenv/config'
 import { installGlobals } from '@remix-run/node'
 import { type MockInstance, beforeEach, vi } from 'vitest'
+import '#app/utils/env.server.ts'
+import '@testing-library/jest-dom/vitest'
 
 installGlobals()
 
@@ -10,10 +12,10 @@ beforeEach(() => {
 	const originalConsoleError = console.error
 	consoleError = vi.spyOn(console, 'error')
 	consoleError.mockImplementation(
-		(...args: Parameters<(typeof console)['error']>) => {
+		(...args: Parameters<typeof console.error>) => {
 			originalConsoleError(...args)
 			throw new Error(
-				'console.error was called. If that is expected, call consoleError.mockImplementation(() => {})',
+				'Console error was called. Call consoleError.mockImplementation(() => {}) if this is expected.',
 			)
 		},
 	)
