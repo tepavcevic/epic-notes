@@ -8,10 +8,9 @@ import { createRemixStub } from '@remix-run/testing'
 import { render, screen } from '@testing-library/react'
 import { AuthenticityTokenProvider } from 'remix-utils/csrf/react'
 import { test } from 'vitest'
-import { default as UsernameRoute, type loader } from './$username.tsx'
 import { type loader as rootLoader } from '#app/root.tsx'
-import { getEnv } from '#app/utils/env.server.js'
 import { honeypot } from '#app/utils/honeypot.server.js'
+import { default as UsernameRoute, type loader } from './$username.tsx'
 
 const csrfToken = 'test-csrf-token'
 
