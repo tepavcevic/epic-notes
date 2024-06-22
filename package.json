@@ -70,6 +70,7 @@
     "@prisma/client": "^5.14.0",
     "@remix-run/dev": "^2.8.0",
     "@remix-run/eslint-config": "^2.8.1",
+    "@remix-run/testing": "^2.9.2",
     "@sly-cli/sly": "^1.10.0",
     "@testing-library/dom": "^10.1.0",
     "@testing-library/jest-dom": "^6.4.6",
