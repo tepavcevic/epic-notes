@@ -10,7 +10,7 @@ const miscHandlers = [
 		: null,
 ].filter(Boolean) as HttpHandler[]
 
-const server = setupServer(
+export const server = setupServer(
 	...miscHandlers,
 	...resendHandlers,
 	...githubHandlers,
