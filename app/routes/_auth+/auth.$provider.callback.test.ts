@@ -15,23 +15,7 @@ const BASE_URL = 'https://epicnotesdemo.com'
 afterEach(() => server.resetHandlers())
 
 test('a new user goes to onboarding', async () => {
-	const url = new URL(ROUTE_PATH, BASE_URL)
-	const state = faker.string.uuid()
-	const code = faker.string.uuid()
-	url.searchParams.set('state', state)
-	url.searchParams.set('code', code)
-
-	const cookieSession = await connectionsSessionStorage.getSession()
-	cookieSession.set('oauth2:state', state)
-	const setCookieHeader =
-		await connectionsSessionStorage.commitSession(cookieSession)
-	const cookieHeader = convertSetCookieToCookie(setCookieHeader)
-
-	const request = new Request(url.toString(), {
-		method: 'GET',
-		headers: { cookie: cookieHeader },
-	})
-
+	const request = await setupRequest()
 	const response = await loader({ request, params: PARAMS, context: {} })
 
 	assertRedirect(response, '/onboarding/github')
@@ -46,6 +30,18 @@ test('when login fails, send user to login', async () => {
 		}),
 	)
 
+	const request = await setupRequest()
+
+	const response = await loader({ request, params: PARAMS, context: {} }).catch(
+		r => r,
+	)
+
+	assertRedirect(response, '/login')
+	asseertToast(response)
+	expect(consoleError).toHaveBeenCalledTimes(1)
+})
+
+async function setupRequest() {
 	const url = new URL(ROUTE_PATH, BASE_URL)
 	const state = faker.string.uuid()
 	const code = faker.string.uuid()
@@ -63,14 +59,8 @@ test('when login fails, send user to login', async () => {
 		headers: { cookie: cookieHeader },
 	})
 
-	const response = await loader({ request, params: PARAMS, context: {} }).catch(
-		r => r,
-	)
-
-	assertRedirect(response, '/login')
-	asseertToast(response)
-	expect(consoleError).toHaveBeenCalledTimes(1)
-})
+	return request
+}
 
 function asseertToast(response: Response) {
 	const setCookie = response.headers.get('set-cookie')
