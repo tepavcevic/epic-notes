@@ -26,6 +26,7 @@ import { validateCSRF } from '#app/utils/csrf.server.ts'
 import { prisma } from '#app/utils/db.server.ts'
 import { checkHoneypot } from '#app/utils/honeypot.server.ts'
 import { invariant, useIsPending } from '#app/utils/misc.tsx'
+import { sessionStorage } from '#app/utils/session.server.js'
 import {
 	EmailSchema,
 	NameSchema,
@@ -166,7 +167,7 @@ export default function OnboardingRoute() {
 
 	const [form, fields] = useForm({
 		id: 'onboarding-form',
-		defaultValue: { redirectTo },
+		defaultValue: { redirectTo, email: data.email },
 		constraint: getZodConstraint(SignupFormSchema),
 		lastResult: actionData,
 		onValidate({ formData }) {
@@ -256,6 +257,8 @@ export default function OnboardingRoute() {
 					/>
 
 					<input {...getInputProps(fields.redirectTo, { type: 'hidden' })} />
+
+					<input {...getInputProps(fields.email, { type: 'hidden' })} />
 
 					<ErrorList errors={form.errors} id={form.errorId} />
 
