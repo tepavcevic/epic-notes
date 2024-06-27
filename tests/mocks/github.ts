@@ -85,6 +85,10 @@ async function getGitHubUsers() {
 	}
 }
 
+export async function deleteGitHubUsers() {
+	await fsExtra.remove(githubUserFixturePath)
+}
+
 export async function setGitHubUsers(users: Array<GitHubUser>) {
 	await fsExtra.writeJson(githubUserFixturePath, users, { spaces: 2 })
 }
