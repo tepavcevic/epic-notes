@@ -2,8 +2,8 @@ import fs from 'fs'
 import { faker } from '@faker-js/faker'
 import bcrypt from 'bcryptjs'
 import { UniqueEnforcer } from 'enforce-unique'
-import { prisma } from '#app/utils/db.server.js'
 import { getPasswordHash } from '#app/utils/auth.server.js'
+import { prisma } from '#app/utils/db.server.js'
 
 const uniqueUsernameEnforcer = new UniqueEnforcer()
 
