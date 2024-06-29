@@ -7,7 +7,7 @@ import { connectionsSessionStorage } from '#app/utils/connections.server.ts'
 import { prisma } from '#app/utils/db.server.js'
 import { invariant } from '#app/utils/misc.js'
 import { sessionStorage } from '#app/utils/session.server.js'
-import { insertNewUser, insertedUsers } from '#tests/db-utils.js'
+import { createUser, insertNewUser, insertedUsers } from '#tests/db-utils.js'
 import { deleteGitHubUsers, insertGitHubUser } from '#tests/mocks/github.js'
 import { server } from '#tests/mocks/index.ts'
 import { consoleError } from '#tests/setup/setup-test-env.js'
@@ -57,25 +57,21 @@ test('when login fails, send user to login', async () => {
 
 test('when a user is logged in, it creates a new connection', async () => {
 	const githubUser = await insertGitHubUser()
-	const newUser = await insertNewUser()
-	const session = await prisma.session.create({
-		select: { id: true },
-		data: { userId: newUser.id, expirationDate: getSessionExpirationDate() },
-	})
-
+	const session = await setupUser()
 	const request = await setupRequest({
 		sessionId: session.id,
 		code: githubUser.code,
 	})
 	const response = await loader({ request, params: PARAMS, context: {} })
+	assertSessionMade(response, session.userId)
 	assertRedirect(response, '/settings/profile/connections')
 	assertToastSent(response)
 
 	const connection = await prisma.connection.findFirst({
-		where: { userId: newUser.id, providerId: githubUser.profile.id },
+		where: { userId: session.userId, providerId: githubUser.profile.id },
 	})
 
-	console.log(connection)
+	expect(connection, 'connection has been made in the database').toBeTruthy()
 })
 
 async function setupRequest({
@@ -87,27 +83,26 @@ async function setupRequest({
 	url.searchParams.set('state', state)
 	url.searchParams.set('code', code)
 
+	const connectionSession = await connectionsSessionStorage.getSession()
+	connectionSession.set('oauth2:state', state)
+
 	const cookieSession = await sessionStorage.getSession()
 	if (sessionId) cookieSession.set(sessionKey, sessionId)
 
-	const connectionCookieSession = await connectionsSessionStorage.getSession()
-	connectionCookieSession.set('oauth2:state', state)
+	const sessionSetCookieHeader =
+		await sessionStorage.commitSession(cookieSession)
 	const connectionSetCookieHeader =
-		await connectionsSessionStorage.commitSession(connectionCookieSession)
-	const setCookieHeader = await sessionStorage.commitSession(cookieSession)
-
-	const connectionCookieHeader = convertSetCookieToCookie(
-		connectionSetCookieHeader,
-	)
-	const cookieHeader = convertSetCookieToCookie(setCookieHeader)
+		await connectionsSessionStorage.commitSession(connectionSession)
 
 	const request = new Request(url.toString(), {
 		method: 'GET',
 		headers: {
-			cookie: [connectionCookieHeader, cookieHeader].join(';'),
+			cookie: [
+				convertSetCookieToCookie(sessionSetCookieHeader),
+				convertSetCookieToCookie(connectionSetCookieHeader),
+			].join('; '),
 		},
 	})
-
 	return request
 }
 
@@ -120,10 +115,37 @@ function assertToastSent(response: Response) {
 	)
 }
 
+async function assertSessionMade(response: Response, userId: string) {
+	const cookie = response.headers.get('set-cookie')
+	invariant(cookie, 'cookie must be present')
+	const setCookies = setCookieParser.splitCookiesString(cookie)
+	expect(setCookies).toEqual(
+		expect.arrayContaining([expect.stringContaining('en_session')]),
+	)
+	const sessionId = setCookies.find(cookie => cookie === 'en_session')
+	const session = await prisma.session.findFirst({
+		where: { userId, id: sessionId },
+	})
+	expect(session?.id).toBe(sessionId)
+}
+
 function assertRedirect(response: Response, redirectTo: string) {
 	expect(response.headers.get('location')).toBe(redirectTo)
 	expect(response.status).toBeGreaterThanOrEqual(300)
 	expect(response.status).toBeLessThan(400)
+}
+
+async function setupUser(userData = createUser()) {
+	const newUser = await insertNewUser(userData)
+	const session = await prisma.session.create({
+		data: {
+			expirationDate: getSessionExpirationDate(),
+			user: { connect: newUser },
+		},
+		select: { id: true, userId: true },
+	})
+
+	return session
 }
 
 function convertSetCookieToCookie(setCookie: string) {
